@@ -23,6 +23,6 @@ import Testing
             try KeychainCredentialSource.accessToken(fromCredentialsJSON: Data(stdout.utf8))
         }
 
-        guard case .notLoggedIn = error else { Issue.record("Expected .notLoggedIn, got \(error)"); return }
+        #expect(error.isSameCase(as: .notLoggedIn))
     }
 }

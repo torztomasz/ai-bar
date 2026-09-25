@@ -9,6 +9,7 @@ public struct ClaudeUsageProvider: UsageProvider {
     public let displayName = "Claude"
     private let credentials: any CredentialSource
     private let transport: any HTTPTransport
+    private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
 
     /// The defaults are the production Keychain and network; tests inject fakes.
     public init(
@@ -25,6 +26,7 @@ public struct ClaudeUsageProvider: UsageProvider {
         return UsageSnapshot(provider: id, fetchedAt: Date(), windows: try decodeWindows(body))
     }
 
+    /// Any credential failure reads as "not logged in": it is the one thing the user can act on.
     private func loadToken() async throws -> String {
         do {
             return try await credentials.accessToken()
@@ -34,16 +36,21 @@ public struct ClaudeUsageProvider: UsageProvider {
     }
 
     private func requestUsage(token: String) async throws -> Data {
-        let (body, status) = try await transport.get(Self.usageURL, headers: [
-            "Authorization": "Bearer \(token)",
-            // The usage endpoint rejects OAuth tokens without this beta flag.
-            "anthropic-beta": "oauth-2025-04-20",
-            "Accept": "application/json",
-        ])
-        switch status {
-        case 200..<300: return body
+        let response: (body: Data, status: Int)
+        do {
+            response = try await transport.get(Self.usageURL, headers: [
+                "Authorization": "Bearer \(token)",
+                // The beta flag opts OAuth tokens into this endpoint.
+                "anthropic-beta": "oauth-2025-04-20",
+                "Accept": "application/json",
+            ])
+        } catch {
+            throw ClaudeUsageError.network(error)
+        }
+        switch response.status {
+        case 200..<300: return response.body
         case 401: throw ClaudeUsageError.tokenExpired
-        default: throw ClaudeUsageError.http(status: status)
+        default: throw ClaudeUsageError.http(status: response.status)
         }
     }
 
@@ -56,21 +63,15 @@ public struct ClaudeUsageProvider: UsageProvider {
             throw ClaudeUsageError.decoding(error)
         }
     }
-
-    private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
-}
-
-/// Where the Claude OAuth access token comes from. A protocol so tests need no Keychain.
-public protocol CredentialSource: Sendable {
-    func accessToken() async throws -> String
 }
 
 /// Why Claude usage could not be fetched, phrased for the popover since the app shows `errorDescription` as is.
+/// Underlying errors are kept for diagnostics, not for display.
 public enum ClaudeUsageError: Error, LocalizedError {
     /// No Claude Code credentials in the Keychain, or they could not be read.
     case notLoggedIn
-    /// The server answered 401: the stored token is no longer valid.
     case tokenExpired
+    case network(any Error)
     case http(status: Int)
     case decoding(any Error)
 
@@ -78,6 +79,7 @@ public enum ClaudeUsageError: Error, LocalizedError {
         switch self {
         case .notLoggedIn: "Sign in to Claude Code to see usage."
         case .tokenExpired: "Your Claude Code session expired. Open Claude Code to renew it."
+        case .network: "Can't reach Claude. Check your internet connection."
         case .http(let status): "Claude usage is unavailable right now (HTTP \(status))."
         case .decoding: "Claude sent usage data AI Bar cannot read."
         }

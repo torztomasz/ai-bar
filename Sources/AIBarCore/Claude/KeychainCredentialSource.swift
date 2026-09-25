@@ -6,6 +6,15 @@ import Foundation
 /// Claude Code's binary: reading it directly would prompt for Keychain access on every new build of this app.
 /// The token is returned only to the caller; it is never logged or persisted.
 public struct KeychainCredentialSource: CredentialSource {
+    /// The shape of Claude Code's Keychain blob, reduced to what the app needs.
+    private struct StoredCredentials: Decodable {
+        let claudeAiOauth: OAuth?
+
+        struct OAuth: Decodable {
+            let accessToken: String?
+        }
+    }
+
     public init() {}
 
     public func accessToken() async throws -> String {
@@ -17,15 +26,6 @@ public struct KeychainCredentialSource: CredentialSource {
               let token = credentials.claudeAiOauth?.accessToken, !token.isEmpty
         else { throw ClaudeUsageError.notLoggedIn }
         return token
-    }
-
-    /// The shape of Claude Code's Keychain blob, reduced to what the app needs.
-    private struct StoredCredentials: Decodable {
-        let claudeAiOauth: OAuth?
-
-        struct OAuth: Decodable {
-            let accessToken: String?
-        }
     }
 
     /// Runs on a global queue because `security` blocks until it exits, which must not stall the cooperative pool.

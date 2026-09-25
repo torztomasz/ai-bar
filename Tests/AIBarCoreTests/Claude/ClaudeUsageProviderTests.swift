@@ -63,6 +63,22 @@ import Testing
         #expect(snapshot.windows.last == UsageWindow(id: "monthly_opus", kind: .other, title: "monthly_opus",
                                                      percentUsed: 5, resetsAt: nil))
     }
+
+    // `UsageWindow` is `Identifiable` and SwiftUI lists break on repeated ids, which these entries would produce.
+    @Test func givesRepeatedWindowsDistinctIDs() async throws {
+        let body = #"""
+        {"limits":[
+          {"kind":"weekly_scoped","percent":1,"scope":{"model":null,"surface":"web"}},
+          {"kind":"weekly_scoped","percent":2,"scope":{"model":null,"surface":"cli"}},
+          {"kind":"monthly_opus","percent":3},
+          {"kind":"monthly_opus","percent":4}
+        ]}
+        """#
+
+        let snapshot = try await provider(answering: body).fetchUsage()
+
+        #expect(snapshot.windows.map(\.id) == ["weekly_scoped", "weekly_scoped#2", "monthly_opus", "monthly_opus#2"])
+    }
 }
 
 // Method: feed bodies with nulls where the app needs a value; one incomplete window must not hide the others.
@@ -90,10 +106,18 @@ import Testing
 
         #expect(snapshot.windows.map(\.id) == ["weekly_all"])
     }
+
+    @Test func fallsBackToLegacyWindowsWhenNoLimitIsUsable() async throws {
+        let body = #"{"limits":[{"kind":"session","percent":null}],"five_hour":{"utilization":8}}"#
+
+        let snapshot = try await provider(answering: body).fetchUsage()
+
+        #expect(snapshot.windows.map(\.percentUsed) == [8])
+    }
 }
 
-// Method: make one seam misbehave (credential source throws, transport answers with an error status or garbage)
-// and check which `ClaudeUsageError` case comes out, since the app picks its message from the case.
+// Method: make one seam misbehave (credential source throws, transport fails, answers with an error status or
+// garbage) and check which `ClaudeUsageError` case comes out, since the app picks its message from the case.
 @Suite struct ClaudeUsageFailures {
     @Test func missingCredentialsMeanNotLoggedIn() async throws {
         let provider = ClaudeUsageProvider(
@@ -101,38 +125,38 @@ import Testing
             transport: FakeTransport(body: Data(realUsageResponse.utf8), status: 200)
         )
 
-        let error = try await #require(throws: ClaudeUsageError.self) { try await provider.fetchUsage() }
+        #expect(try await failure(of: provider).isSameCase(as: .notLoggedIn))
+    }
 
-        guard case .notLoggedIn = error else { Issue.record("Expected .notLoggedIn, got \(error)"); return }
+    @Test func unreachableServerIsANetworkError() async throws {
+        let provider = ClaudeUsageProvider(credentials: FakeCredentialSource(result: .success("test-token")),
+                                           transport: OfflineTransport())
+
+        #expect(try await failure(of: provider).isSameCase(as: .network(URLError(.notConnectedToInternet))))
     }
 
     @Test func unauthorizedMeansTheTokenExpired() async throws {
-        let error = try await #require(throws: ClaudeUsageError.self) {
-            try await provider(answering: #"{"error":"unauthorized"}"#, status: 401).fetchUsage()
-        }
+        let provider = provider(answering: #"{"error":"unauthorized"}"#, status: 401)
 
-        guard case .tokenExpired = error else { Issue.record("Expected .tokenExpired, got \(error)"); return }
+        #expect(try await failure(of: provider).isSameCase(as: .tokenExpired))
     }
 
     @Test func otherErrorStatusesCarryTheStatusCode() async throws {
-        let error = try await #require(throws: ClaudeUsageError.self) {
-            try await provider(answering: "Internal Server Error", status: 500).fetchUsage()
-        }
+        let provider = provider(answering: "Internal Server Error", status: 500)
 
-        guard case .http(status: 500) = error else { Issue.record("Expected .http(500), got \(error)"); return }
+        #expect(try await failure(of: provider).isSameCase(as: .http(status: 500)))
     }
 
     @Test func unreadableBodyIsADecodingError() async throws {
-        let error = try await #require(throws: ClaudeUsageError.self) {
-            try await provider(answering: "<html>maintenance</html>").fetchUsage()
-        }
+        let provider = provider(answering: "<html>maintenance</html>")
 
-        guard case .decoding = error else { Issue.record("Expected .decoding, got \(error)"); return }
+        #expect(try await failure(of: provider).isSameCase(as: .decoding(CocoaError(.coderReadCorrupt))))
     }
 
     // The app shows `errorDescription` verbatim, so every case must have one.
     @Test(arguments: [
         ClaudeUsageError.notLoggedIn, .tokenExpired, .http(status: 503), .decoding(CocoaError(.coderReadCorrupt)),
+        .network(URLError(.timedOut)),
     ])
     func everyErrorHasAUserFacingMessage(_ error: ClaudeUsageError) {
         #expect(error.errorDescription?.isEmpty == false)
@@ -165,10 +189,20 @@ private func provider(answering body: String, status: Int = 200) -> ClaudeUsageP
     )
 }
 
+private func failure(of provider: ClaudeUsageProvider) async throws -> ClaudeUsageError {
+    try await #require(throws: ClaudeUsageError.self) { try await provider.fetchUsage() }
+}
+
 private struct FakeCredentialSource: CredentialSource {
     let result: Result<String, any Error>
 
     func accessToken() async throws -> String { try result.get() }
+}
+
+private struct OfflineTransport: HTTPTransport {
+    func get(_ url: URL, headers: [String: String]) async throws -> (body: Data, status: Int) {
+        throw URLError(.notConnectedToInternet)
+    }
 }
 
 private final class RecordingTransport: HTTPTransport, @unchecked Sendable {
@@ -177,7 +211,7 @@ private final class RecordingTransport: HTTPTransport, @unchecked Sendable {
 
     var requests: [(url: URL, headers: [String: String])] { lock.withLock { recorded } }
 
-    func get(_ url: URL, headers: [String: String]) async throws -> (Data, Int) {
+    func get(_ url: URL, headers: [String: String]) async throws -> (body: Data, status: Int) {
         lock.withLock { recorded.append((url, headers)) }
         return (Data(realUsageResponse.utf8), 200)
     }
@@ -187,5 +221,5 @@ private struct FakeTransport: HTTPTransport {
     let body: Data
     let status: Int
 
-    func get(_ url: URL, headers: [String: String]) async throws -> (Data, Int) { (body, status) }
+    func get(_ url: URL, headers: [String: String]) async throws -> (body: Data, status: Int) { (body, status) }
 }
