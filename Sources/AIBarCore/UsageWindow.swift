@@ -30,4 +30,9 @@ public struct UsageWindow: Equatable, Sendable, Identifiable {
         self.percentUsed = percentUsed
         self.resetsAt = resetsAt
     }
+
+    /// True once the reported reset time has come, i.e. the reading belongs to a window that is already over.
+    public func isPastReset(now: Date) -> Bool {
+        resetsAt.map { $0 <= now } ?? false
+    }
 }

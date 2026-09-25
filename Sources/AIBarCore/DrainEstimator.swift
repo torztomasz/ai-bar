@@ -41,6 +41,14 @@ public struct DrainEstimator {
                              ratePercentPerHour: rate)
     }
 
+    /// Forecasts a window as the provider reported it. A reset time already in the past means the provider has not
+    /// caught up with the reset, so the reading describes a window that is over: the outlook is unknown until a
+    /// later poll brings the new window.
+    public func forecast(for window: UsageWindow, samples: [UsageSample], now: Date) -> DrainForecast {
+        guard !window.isPastReset(now: now) else { return .unknown }
+        return forecast(samples: samples, resetsAt: window.resetsAt, now: now)
+    }
+
     /// With no reset time there is nothing to project over, but a reading at the limit still means drained.
     private func forecastWithoutReset(samples: [UsageSample], now: Date) -> DrainForecast {
         guard let latest = samples.filter({ $0.at <= now }).latest, latest.isAtLimit else { return .unknown }
