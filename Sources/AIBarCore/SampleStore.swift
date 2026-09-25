@@ -8,12 +8,12 @@ import os
 public final class SampleStore: Sendable {
     public let fileURL: URL
     public let windowLength: TimeInterval
-    private let cached: OSAllocatedUnfairLock<[UsageSample]>
+    private let lockedSamples: OSAllocatedUnfairLock<[UsageSample]>
 
-    public init(fileURL: URL, windowLength: TimeInterval = 5 * 3600) {
+    public init(fileURL: URL, windowLength: TimeInterval = SessionWindow.defaultLength) {
         self.fileURL = fileURL
         self.windowLength = windowLength
-        cached = OSAllocatedUnfairLock(initialState: Self.load(from: fileURL))
+        lockedSamples = OSAllocatedUnfairLock(initialState: Self.load(from: fileURL))
     }
 
     /// `~/Library/Application Support/AI Bar/samples-<provider>.json`; directories are created on first save.
@@ -24,24 +24,24 @@ public final class SampleStore: Sendable {
         return SampleStore(fileURL: fileURL)
     }
 
-    /// Drops samples from before the current window first, so the file stays bounded. Without `resetsAt` the window
-    /// start is unknown, so anything more than one window length older than `sample` is dropped instead.
+    /// Keeps only samples inside the current window, `sample` included, so the file stays bounded. Without
+    /// `resetsAt` the window start is unknown, so anything more than one window length older than `sample` goes.
     public func append(_ sample: UsageSample, resetsAt: Date?) {
         // Saving inside the lock keeps concurrent appends from overwriting the file with an older list.
-        cached.withLock { samples in
-            let windowStart = (resetsAt ?? sample.at).addingTimeInterval(-windowLength)
-            samples.removeAll { $0.at < windowStart }
+        lockedSamples.withLock { samples in
+            let windowStart = SessionWindow.start(resetsAt: resetsAt ?? sample.at, length: windowLength)
             samples.append(sample)
+            samples.removeAll { $0.at < windowStart }
             save(samples)
         }
     }
 
     public func samples() -> [UsageSample] {
-        cached.withLock { $0 }
+        lockedSamples.withLock { $0 }
     }
 
     public func clear() {
-        cached.withLock { samples in
+        lockedSamples.withLock { samples in
             samples.removeAll()
             save(samples)
         }
@@ -52,7 +52,8 @@ public final class SampleStore: Sendable {
         do {
             return try JSONDecoder().decode([UsageSample].self, from: Data(contentsOf: fileURL))
         } catch {
-            logger.error("Discarding unreadable usage samples at \(fileURL.path(percentEncoded: false), privacy: .public): \(error)")
+            let path = fileURL.path(percentEncoded: false)
+            logger.error("Discarding unreadable usage samples at \(path, privacy: .public): \(error)")
             return []
         }
     }
@@ -63,9 +64,10 @@ public final class SampleStore: Sendable {
                                                     withIntermediateDirectories: true)
             try JSONEncoder().encode(samples).write(to: fileURL, options: .atomic)
         } catch {
-            logger.error("Could not save usage samples to \(self.fileURL.path(percentEncoded: false), privacy: .public): \(error)")
+            let path = fileURL.path(percentEncoded: false)
+            logger.error("Could not save usage samples to \(path, privacy: .public): \(error)")
         }
     }
 }
 
-private let logger = Logger(subsystem: "AIBar", category: "SampleStore")
+private let logger = Logger(subsystem: "com.torz.aibar", category: "SampleStore")

@@ -8,7 +8,8 @@ let package = Package(
         .executable(name: "AIBar", targets: ["AIBar"]),
     ],
     targets: [
-        // Foundation-only so every piece of domain logic stays unit-testable without AppKit.
+        // Foundation-only (plus `os` for locks and logging) so every piece of domain logic stays unit-testable
+        // without AppKit.
         .target(name: "AIBarCore"),
         .executableTarget(name: "AIBar", dependencies: ["AIBarCore"]),
         .testTarget(name: "AIBarCoreTests", dependencies: ["AIBarCore"]),

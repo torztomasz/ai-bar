@@ -5,7 +5,8 @@ import Testing
 // Method: each test gets its own file in a fresh temp directory. Persistence is observed the way the app would see it
 // after a restart: by opening a second store on the same file, never by reading the JSON directly.
 @Suite final class SampleStoreBehavior {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    let directory = FileManager.default.temporaryDirectory
+        .appending(path: UUID().uuidString, directoryHint: .isDirectory)
     var fileURL: URL { directory.appending(path: "samples.json", directoryHint: .notDirectory) }
 
     deinit {
@@ -34,6 +35,15 @@ import Testing
 
         #expect(store.samples() == [current])
         #expect(SampleStore(fileURL: fileURL).samples() == [current])
+    }
+
+    // Appended late, e.g. a poll result that sat in a queue across the reset: it is already outside the window.
+    @Test func appendingASampleFromBeforeTheCurrentWindowDoesNotKeepIt() {
+        let store = SampleStore(fileURL: fileURL)
+
+        store.append(UsageSample(at: start.addingTimeInterval(-600), percentUsed: 80), resetsAt: resetsAt)
+
+        #expect(store.samples().isEmpty)
     }
 
     // With no reset time the window start is unknown, so anything more than one window length (5h) older than the
@@ -88,5 +98,5 @@ import Testing
     }
 }
 
-private let resetsAt = Date(timeIntervalSince1970: 1_800_000_000)
-private let start = resetsAt.addingTimeInterval(-5 * 3600)
+private let resetsAt = FixtureWindow.resetsAt
+private let start = FixtureWindow.time(hours: 0)
