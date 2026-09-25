@@ -78,8 +78,8 @@ private struct WindowRow: View {
                 Spacer()
                 Text(UsageText.percent(window.percentUsed)).monospacedDigit()
             }
-            // Clamped because a provider may report overage above 100%, which ProgressView cannot draw.
-            ProgressView(value: min(max(window.percentUsed, 0), 100), total: 100)
+            UsageBarView(bar: UsageBar(percentUsed: window.percentUsed,
+                                       projectedPercentAtReset: forecast?.projectedPercentAtReset))
             HStack {
                 Text(UsageText.resetsIn(window.resetsAt, now: now))
                 Spacer()
@@ -89,6 +89,43 @@ private struct WindowRow: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Drawn by hand rather than with `ProgressView`, which turns grey whenever the popover is not the key window and so
+/// would hide the threshold colour exactly when the user glances at it.
+private struct UsageBarView: View {
+    let bar: UsageBar
+
+    /// Faint enough that the solid fill stays the obvious reading, visible enough to notice where usage is heading.
+    private static let estimateOpacity = 0.25
+    private static let height: CGFloat = 6
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.quaternary)
+                if let estimate = bar.estimate {
+                    Capsule()
+                        .fill(estimate.level.color.opacity(Self.estimateOpacity))
+                        .frame(width: geometry.size.width * estimate.fraction)
+                }
+                Capsule()
+                    .fill(bar.fill.level.color)
+                    .frame(width: geometry.size.width * bar.fill.fraction)
+            }
+        }
+        .frame(height: Self.height)
+    }
+}
+
+extension UsageLevel {
+    fileprivate var color: Color {
+        switch self {
+        case .ok: .green
+        case .warning: .yellow
+        case .critical: .red
         }
     }
 }
