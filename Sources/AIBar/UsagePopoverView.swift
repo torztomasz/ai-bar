@@ -101,15 +101,19 @@ private struct WindowRow: View {
         Text(UsageText.resetsIn(window.resetsAt, now: now)).fixedSize()
     }
 
-    /// Being locked out is the one thing the row must not let the user miss, so it takes the bar's critical colour.
     @ViewBuilder private var lockoutLine: some View {
         if let forecast {
-            let isLockedOut = forecast.lockout(resetsAt: window.resetsAt) != nil
             Text(UsageText.lockout(forecast, resetsAt: window.resetsAt))
                 .fontWeight(isLockedOut ? .semibold : nil)
                 .foregroundStyle(isLockedOut ? AnyShapeStyle(UsageLevel.critical.color) : AnyShapeStyle(.secondary))
                 .fixedSize()
         }
+    }
+
+    /// Being locked out is the one thing the row must not let the user miss, so it takes the bar's critical colour.
+    /// That includes a drained window with no reset time: its line still says "Locked out" and the badge is red.
+    private var isLockedOut: Bool {
+        if case .willDrain = forecast?.outlook { true } else { false }
     }
 }
 

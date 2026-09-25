@@ -74,7 +74,6 @@ import Testing
         #expect(UsageText.lockout(.verdict(.unknown), resetsAt: after(hours: 2)) == "No estimate yet")
         #expect(UsageText.lockout(nil, resetsAt: after(hours: 2)) == "No estimate yet")
     }
-
 }
 
 @Suite struct StatusItemTooltip {

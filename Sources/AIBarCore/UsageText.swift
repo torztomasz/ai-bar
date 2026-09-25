@@ -22,7 +22,7 @@ public enum UsageText {
             parts.append(resetsIn(resetsAt, now: now))
         }
         if case .willDrain = forecast?.outlook {
-            parts.append(lockout(forecast, resetsAt: primaryWindow.resetsAt).lowercased())
+            parts.append("locked out\(lockoutLength(forecast, resetsAt: primaryWindow.resetsAt))")
         }
         if let errorDescription {
             parts.append("last refresh failed: \(errorDescription)")
@@ -49,12 +49,11 @@ public enum UsageText {
     }
 
     /// Answers "for how long will I be without this provider?" rather than when it drains, which would leave the
-    /// reader to do the date arithmetic. Approximate because the drain time is a projection.
+    /// reader to do the date arithmetic.
     public static func lockout(_ forecast: DrainForecast?, resetsAt: Date?) -> String {
         switch forecast?.outlook {
         case .willDrain:
-            guard let lockout = forecast?.lockout(resetsAt: resetsAt) else { return "Locked out" }
-            return "Locked out for ~\(duration(lockout))"
+            return "Locked out\(lockoutLength(forecast, resetsAt: resetsAt))"
         case .willLast:
             return "Lasts to reset"
         case .unknown, nil:
@@ -65,6 +64,13 @@ public enum UsageText {
     /// Whole percent, shared by badge, tooltip and popover so they never disagree on rounding.
     public static func percent(_ value: Double) -> String {
         "\(Int(value.rounded()))%"
+    }
+
+    /// ` for ~1h 20m`, approximate because the drain time is a projection; empty when no reset time says when the
+    /// lockout ends.
+    private static func lockoutLength(_ forecast: DrainForecast?, resetsAt: Date?) -> String {
+        guard let length = forecast?.lockout(resetsAt: resetsAt) else { return "" }
+        return " for ~\(duration(length))"
     }
 
     /// `2h 13m`, `4d 3h 12m`: leading zero units are dropped, and anything under a minute reads `<1m` rather than

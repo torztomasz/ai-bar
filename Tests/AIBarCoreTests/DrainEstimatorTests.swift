@@ -166,7 +166,6 @@ import Testing
     @Test func unknownResetTimeHasNoLockout() {
         #expect(DrainForecast.verdict(.willDrain(at: time(hours: 3.5))).lockout(resetsAt: nil) == nil)
     }
-
 }
 
 private let estimator = DrainEstimator(windowLength: FixtureWindow.length)
