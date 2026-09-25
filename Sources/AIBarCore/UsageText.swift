@@ -68,10 +68,13 @@ public enum UsageText {
     }
 
     /// ` for ~1h 20m`, approximate because the drain time is a projection; empty when no reset time says when the
-    /// lockout ends.
+    /// lockout ends. A lockout of a day or more is rounded to the hour (` for ~2d 19h`): a projection days out is not
+    /// good to the minute.
     private static func lockoutLength(_ forecast: DrainForecast?, resetsAt: Date?) -> String {
         guard let length = forecast?.lockout(resetsAt: resetsAt) else { return "" }
-        return " for ~\(duration(length))"
+        guard length >= RollingWindow.day else { return " for ~\(duration(length))" }
+        let totalHours = Int((length / RollingWindow.secondsPerHour).rounded())
+        return " for ~\(totalHours / 24)d \(totalHours % 24)h"
     }
 
     /// `2h 13m`, `4d 3h 12m`: leading zero units are dropped, and anything under a minute reads `<1m` rather than

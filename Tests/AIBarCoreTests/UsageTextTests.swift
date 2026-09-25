@@ -61,6 +61,21 @@ import Testing
         #expect(UsageText.lockout(forecast, resetsAt: after(hours: 2, minutes: 20)) == "Locked out for ~1h 20m")
     }
 
+    // A weekly lockout is a projection days out; to the minute would claim precision it does not have. 2d 18h 40m
+    // rounds to the nearest hour.
+    @Test func lockoutOfADayOrMoreIsInDaysAndHours() {
+        let forecast = DrainForecast.verdict(.willDrain(at: now))
+
+        #expect(UsageText.lockout(forecast, resetsAt: after(hours: 2 * 24 + 18, minutes: 40)) == "Locked out for ~2d 19h")
+    }
+
+    // 23h 50m is under a day, so it keeps its minutes rather than rounding up into "~1d 0h".
+    @Test func lockoutUnderADayKeepsItsMinutes() {
+        let forecast = DrainForecast.verdict(.willDrain(at: now))
+
+        #expect(UsageText.lockout(forecast, resetsAt: after(hours: 23, minutes: 50)) == "Locked out for ~23h 50m")
+    }
+
     // A window at its limit drains even when the provider gives no reset time; nothing says how long it lasts.
     @Test func drainWithoutAResetTimeIsALockoutOfUnknownLength() {
         #expect(UsageText.lockout(.verdict(.willDrain(at: now)), resetsAt: nil) == "Locked out")
