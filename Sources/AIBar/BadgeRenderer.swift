@@ -2,21 +2,20 @@ import AIBarCore
 import AppKit
 
 /// Draws the menu bar badge as an image rather than a button title, because a title cannot carry a
-/// coloured capsule background.
-///
-/// The capsule copies the system camera indicator that sits beside it, so the two read as one family. Its size was
-/// measured in `tickets/005-reference-camera-pill.png`, which is 1 px per point (the 18 pt badge of the time is
-/// 18 px tall there): the pill is 24 pt tall and its glyph sits about 11 pt in from either end.
+/// coloured capsule background. The capsule copies the system camera indicator beside it (see `BadgeSize`).
 @MainActor
 enum BadgeRenderer {
     private static let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
-    private static let height: CGFloat = 24
-    private static let horizontalPadding: CGFloat = 11
-    private static let cornerRadius = height / 2
+    /// The camera pill's glyph sits about 11 pt in from either end of its 24 pt height; the text keeps that inset,
+    /// scaled with the badge on a menu bar too short for the full height.
+    private static let paddingPerPointOfHeight: CGFloat = 11 / 24
 
-    static func image(text: String, tint: BadgeTint) -> NSImage {
+    static func image(text: String, tint: BadgeTint, height: CGFloat) -> NSImage {
+        let horizontalPadding = height * paddingPerPointOfHeight
+        let cornerRadius = height / 2
         let textSize = (text as NSString).size(withAttributes: [.font: font])
-        let size = NSSize(width: ceil(textSize.width) + 2 * horizontalPadding, height: height)
+        // Whole points, so the capsule's ends land on pixel boundaries instead of blurring.
+        let size = NSSize(width: ceil(textSize.width + 2 * horizontalPadding), height: height)
 
         // The handler runs at draw time, so `labelColor` resolves against the menu bar's current
         // light/dark appearance instead of the one active when the image was created.

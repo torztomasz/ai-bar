@@ -22,6 +22,7 @@ final class StatusItemController: NSObject {
         popover.contentViewController = hostingController
         configureButton()
         startTooltipClock()
+        refitBadgeWhenDisplaysChange()
         render()
     }
 
@@ -35,7 +36,8 @@ final class StatusItemController: NSObject {
         let primaryWindow = shownState?.snapshot?.primaryWindow
         let text = UsageText.badge(primaryWindow: primaryWindow, hasError: shownState?.lastError != nil)
         let tint = BadgeTint(forecast: shownState?.primaryForecast)
-        statusItem.button?.image = BadgeRenderer.image(text: text, tint: tint)
+        let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))
+        statusItem.button?.image = BadgeRenderer.image(text: text, tint: tint, height: height)
         statusItem.button?.toolTip = shownState.map { state in
             UsageText.tooltip(providerName: state.displayName, primaryWindow: primaryWindow,
                               forecast: state.primaryForecast,
@@ -47,6 +49,16 @@ final class StatusItemController: NSObject {
     /// its own to stay accurate in between.
     private func startTooltipClock() {
         tooltipClock = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.render() }
+        }
+    }
+
+    /// The badge's height depends on the menu bars it appears in, which change as displays come and go.
+    private func refitBadgeWhenDisplaysChange() {
+        // The notification center keeps the observer for the app's lifetime, which is this controller's lifetime.
+        _ = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
             MainActor.assumeIsolated { self?.render() }
         }
     }
@@ -81,5 +93,12 @@ final class StatusItemController: NSObject {
             NSApp.activate()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
+    }
+}
+
+extension NSScreen {
+    /// Points between the top of the screen and its visible area; 0 while a full-screen app hides the menu bar.
+    fileprivate var menuBarHeight: Double {
+        Double(frame.maxY - visibleFrame.maxY)
     }
 }
