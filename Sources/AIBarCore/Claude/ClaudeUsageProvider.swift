@@ -10,7 +10,11 @@ public struct ClaudeUsageProvider: UsageProvider {
     private let credentials: any CredentialSource
     private let transport: any HTTPTransport
 
-    public init(credentials: any CredentialSource, transport: any HTTPTransport) {
+    /// The defaults are the production Keychain and network; tests inject fakes.
+    public init(
+        credentials: any CredentialSource = KeychainCredentialSource(),
+        transport: any HTTPTransport = URLSessionTransport()
+    ) {
         self.credentials = credentials
         self.transport = transport
     }
