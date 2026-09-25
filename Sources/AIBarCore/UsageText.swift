@@ -58,7 +58,8 @@ public enum UsageText {
         }
     }
 
-    static func percent(_ value: Double) -> String {
+    /// Whole percent, shared by badge, tooltip and popover so they never disagree on rounding.
+    public static func percent(_ value: Double) -> String {
         "\(Int(value.rounded()))%"
     }
 

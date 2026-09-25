@@ -2,30 +2,26 @@ import AIBarCore
 import AppKit
 import os
 
-/// Composes the shell: one provider feeding one status item. The fake provider supplies placeholder data
-/// until a real one exists.
+/// Composes the app: the usage controller feeds the status item's badge and popover, and both refresh triggers
+/// (right click, the popover's button) go back to the controller.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let provider: any UsageProvider = FakeUsageProvider(snapshot: .sample(fetchedAt: Date()))
+    private let usage = UsageController(providers: [ClaudeUsageProvider()])
     private var statusItemController: StatusItemController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let controller = StatusItemController(providerName: provider.displayName)
-        controller.onRefreshRequested = {
-            Log.app.notice("refresh requested")
+        let statusItem = StatusItemController(popoverContent: UsagePopoverView(controller: usage) {
+            NSApplication.shared.terminate(nil)
+        })
+        statusItem.onRefreshRequested = { [weak usage] in
+            Task { await usage?.refresh() }
         }
-        statusItemController = controller
-        loadUsage()
-    }
-
-    private func loadUsage() {
-        Task {
-            do {
-                statusItemController?.updatePopover(with: try await provider.fetchUsage())
-            } catch {
-                Log.app.error("fetching usage failed: \(error.localizedDescription, privacy: .public)")
-            }
+        // One badge can only speak for one provider; v1 has just Claude, so it follows the first.
+        usage.onStatesChanged = { [weak statusItem] states in
+            statusItem?.show(states.first)
         }
+        statusItemController = statusItem
+        usage.start()
     }
 }
 

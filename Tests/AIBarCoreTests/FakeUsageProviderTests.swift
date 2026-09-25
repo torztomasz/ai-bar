@@ -25,7 +25,7 @@ import Testing
         #expect(elapsed >= .milliseconds(200))
     }
 
-    // The app shell renders the sample as placeholder data, so it must drive the badge.
+    // The sample stands in for real data, so it must drive the badge like a real snapshot would.
     @Test func sampleSnapshotHasABadgeWindow() {
         let sample = UsageSnapshot.sample(fetchedAt: Date(timeIntervalSince1970: 0))
 

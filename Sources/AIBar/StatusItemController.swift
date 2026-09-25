@@ -2,37 +2,51 @@ import AIBarCore
 import AppKit
 import SwiftUI
 
-/// Owns the menu bar item: draws the badge, toggles the usage popover on left click,
+/// Owns the menu bar item: draws the badge and tooltip, toggles the usage popover on left click,
 /// and reports right click (or control-click) as a refresh request.
 @MainActor
 final class StatusItemController: NSObject {
     var onRefreshRequested: () -> Void = {}
 
-    private let providerName: String
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
-    private var snapshot: UsageSnapshot?
+    private var shownState: ProviderState?
+    private var tooltipClock: Timer?
 
-    init(providerName: String) {
-        self.providerName = providerName
+    init(popoverContent: some View) {
         super.init()
         popover.behavior = .transient
-        reloadPopoverContent()
+        let hostingController = NSHostingController(rootView: popoverContent)
+        // Lets the popover resize when its content changes, e.g. from an error message to the window rows.
+        hostingController.sizingOptions = .preferredContentSize
+        popover.contentViewController = hostingController
         configureButton()
-        showBadge(text: "--%", tint: .neutral)
+        startTooltipClock()
+        render()
     }
 
-    func updatePopover(with snapshot: UsageSnapshot) {
-        self.snapshot = snapshot
-        reloadPopoverContent()
+    /// Shows `state` in the badge; nil before any provider has reported.
+    func show(_ state: ProviderState?) {
+        shownState = state
+        render()
     }
 
-    func showBadge(text: String, tint: BadgeTint) {
-        statusItem.button?.image = BadgeRenderer.image(text: text, tint: tint)
+    private func render() {
+        let primaryWindow = shownState?.snapshot?.primaryWindow
+        let text = UsageText.badge(primaryWindow: primaryWindow, hasError: shownState?.lastError != nil)
+        statusItem.button?.image = BadgeRenderer.image(text: text, tint: BadgeTint(forecast: shownState?.forecast))
+        statusItem.button?.toolTip = shownState.map { state in
+            UsageText.tooltip(providerName: state.displayName, primaryWindow: primaryWindow, forecast: state.forecast,
+                              errorDescription: state.lastError?.localizedDescription, now: Date())
+        }
     }
 
-    private func reloadPopoverContent() {
-        popover.contentViewController = NSHostingController(rootView: popoverView())
+    /// The tooltip counts down to the reset in minutes, but data only changes every poll, so it is redrawn on
+    /// its own to stay accurate in between.
+    private func startTooltipClock() {
+        tooltipClock = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.render() }
+        }
     }
 
     private func configureButton() {
@@ -40,12 +54,6 @@ final class StatusItemController: NSObject {
         button.target = self
         button.action = #selector(handleClick(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-    }
-
-    private func popoverView() -> UsagePopoverView {
-        UsagePopoverView(providerName: providerName, snapshot: snapshot) {
-            NSApplication.shared.terminate(nil)
-        }
     }
 
     @objc private func handleClick(_ sender: NSStatusBarButton) {
