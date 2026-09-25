@@ -19,8 +19,8 @@ public struct UsageSnapshot: Equatable, Sendable {
     }
 }
 
-/// Identifies a usage provider, e.g. `"claude"`. A wrapper rather than a bare `String` so provider keys
-/// cannot be confused with window ids or display names.
+/// Identifies a usage provider, e.g. `"claude"`. A wrapper rather than a bare `String` so a provider key
+/// cannot be passed where a display name is expected, or vice versa.
 public struct ProviderID: Hashable, Sendable, RawRepresentable {
     public let rawValue: String
 

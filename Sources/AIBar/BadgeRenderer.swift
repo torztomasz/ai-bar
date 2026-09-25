@@ -1,12 +1,5 @@
+import AIBarCore
 import AppKit
-
-/// Badge background: `.neutral` draws text only, `.ok` and `.danger` add a green or red pill
-/// so the forecast is readable at a glance.
-enum BadgeTint {
-    case neutral
-    case ok
-    case danger
-}
 
 /// Draws the menu bar badge as an image rather than a button title, because a title cannot carry a
 /// coloured rounded background.
@@ -24,11 +17,11 @@ enum BadgeRenderer {
         // The handler runs at draw time, so `labelColor` resolves against the menu bar's current
         // light/dark appearance instead of the one active when the image was created.
         let image = NSImage(size: size, flipped: false) { bounds in
-            if let fill = backgroundColor(for: tint) {
+            if let fill = tint.backgroundColor {
                 fill.setFill()
                 NSBezierPath(roundedRect: bounds, xRadius: cornerRadius, yRadius: cornerRadius).fill()
             }
-            let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor(for: tint)]
+            let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: tint.textColor]
             let origin = NSPoint(x: (bounds.width - textSize.width) / 2, y: (bounds.height - textSize.height) / 2)
             (text as NSString).draw(at: origin, withAttributes: attributes)
             return true
@@ -37,17 +30,20 @@ enum BadgeRenderer {
         image.isTemplate = false
         return image
     }
+}
 
-    private static func backgroundColor(for tint: BadgeTint) -> NSColor? {
-        switch tint {
+// A coloured pill makes the forecast readable at a glance; neutral stays plain text like other menu bar items.
+extension BadgeTint {
+    fileprivate var backgroundColor: NSColor? {
+        switch self {
         case .neutral: nil
         case .ok: .systemGreen
         case .danger: .systemRed
         }
     }
 
-    private static func textColor(for tint: BadgeTint) -> NSColor {
-        switch tint {
+    fileprivate var textColor: NSColor {
+        switch self {
         case .neutral: .labelColor
         case .ok, .danger: .white
         }

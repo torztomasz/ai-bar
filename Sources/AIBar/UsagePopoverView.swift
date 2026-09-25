@@ -2,6 +2,7 @@ import AIBarCore
 import SwiftUI
 
 /// Popover shown on left click: the provider's name and one row per usage window.
+/// Takes the name separately because a snapshot only carries the provider's id, not its display name.
 struct UsagePopoverView: View {
     let providerName: String
     let snapshot: UsageSnapshot?

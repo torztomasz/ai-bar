@@ -16,22 +16,22 @@ final class StatusItemController: NSObject {
     init(providerName: String) {
         self.providerName = providerName
         super.init()
-        configurePopover()
+        popover.behavior = .transient
+        reloadPopoverContent()
         configureButton()
         showBadge(text: "--%", tint: .neutral)
     }
 
-    func show(snapshot: UsageSnapshot?) {
+    func updatePopover(with snapshot: UsageSnapshot) {
         self.snapshot = snapshot
-        popover.contentViewController = NSHostingController(rootView: popoverView())
+        reloadPopoverContent()
     }
 
     func showBadge(text: String, tint: BadgeTint) {
         statusItem.button?.image = BadgeRenderer.image(text: text, tint: tint)
     }
 
-    private func configurePopover() {
-        popover.behavior = .transient
+    private func reloadPopoverContent() {
         popover.contentViewController = NSHostingController(rootView: popoverView())
     }
 
@@ -50,7 +50,6 @@ final class StatusItemController: NSObject {
 
     @objc private func handleClick(_ sender: NSStatusBarButton) {
         if isSecondaryClick(NSApp.currentEvent) {
-            popover.performClose(sender)
             onRefreshRequested()
         } else {
             togglePopover(from: sender)

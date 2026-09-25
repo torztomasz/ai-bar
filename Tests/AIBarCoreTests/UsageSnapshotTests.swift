@@ -23,8 +23,8 @@ import Testing
     }
 }
 
-private func window(_ id: String, kind: UsageWindow.Kind, percent: Double = 10) -> UsageWindow {
-    UsageWindow(id: id, kind: kind, title: id, percentUsed: percent, resetsAt: nil)
+private func window(_ id: String, kind: UsageWindow.Kind) -> UsageWindow {
+    UsageWindow(id: id, kind: kind, title: id, percentUsed: 10, resetsAt: nil)
 }
 
 private func snapshot(windows: [UsageWindow]) -> UsageSnapshot {

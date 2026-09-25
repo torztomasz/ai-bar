@@ -13,7 +13,6 @@ public struct UsageWindow: Equatable, Sendable, Identifiable {
     public let title: String
     /// 0...100, but may exceed 100 if the provider reports overage.
     public let percentUsed: Double
-    /// `nil` when the provider does not report a reset time.
     public let resetsAt: Date?
 
     public enum Kind: Equatable, Sendable {
