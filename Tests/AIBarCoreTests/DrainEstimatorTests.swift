@@ -140,6 +140,35 @@ import Testing
     }
 }
 
+// Method: verdicts built by hand on the fixture window, so each lockout is the plain gap between a drain time and
+// the reset, readable off the hour offsets.
+@Suite struct LockoutDuration {
+    // Draining 3h30m into a 5-hour window leaves the user without the provider for the last 1h30m.
+    @Test func drainBeforeResetLocksOutUntilTheReset() {
+        let forecast = DrainForecast.verdict(.willDrain(at: time(hours: 3.5)))
+
+        #expect(forecast.lockout(resetsAt: FixtureWindow.resetsAt) == TimeInterval(90 * 60))
+    }
+
+    // A drain reported as "now" can land after a stale reset time; a negative lockout would be nonsense.
+    @Test func drainAfterResetIsNoLongerThanZero() {
+        let forecast = DrainForecast.verdict(.willDrain(at: time(hours: 5.5)))
+
+        #expect(forecast.lockout(resetsAt: FixtureWindow.resetsAt) == 0)
+    }
+
+    @Test func windowThatLastsOrIsUnknownHasNoLockout() {
+        #expect(DrainForecast.verdict(.willLast).lockout(resetsAt: FixtureWindow.resetsAt) == nil)
+        #expect(DrainForecast.verdict(.unknown).lockout(resetsAt: FixtureWindow.resetsAt) == nil)
+    }
+
+    // Without a reset time nothing says when the lockout ends.
+    @Test func unknownResetTimeHasNoLockout() {
+        #expect(DrainForecast.verdict(.willDrain(at: time(hours: 3.5))).lockout(resetsAt: nil) == nil)
+    }
+
+}
+
 private let estimator = DrainEstimator(windowLength: FixtureWindow.length)
 
 private func time(hours: Double) -> Date {

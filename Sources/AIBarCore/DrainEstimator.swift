@@ -76,6 +76,13 @@ public struct DrainForecast: Equatable, Sendable {
     public let ratePercentPerHour: Double?
 
     static let unknown = DrainForecast(outlook: .unknown, projectedPercentAtReset: nil, ratePercentPerHour: nil)
+
+    /// How long the user will be without the provider: from the drain until the reset, which ends the lockout.
+    /// Never negative, because a drain reported as "now" can fall after a reset time the provider has not updated.
+    public func lockout(resetsAt: Date?) -> TimeInterval? {
+        guard case .willDrain(let drainsAt) = outlook, let resetsAt else { return nil }
+        return max(resetsAt.timeIntervalSince(drainsAt), 0)
+    }
 }
 
 private let limitPercent: Double = 100
