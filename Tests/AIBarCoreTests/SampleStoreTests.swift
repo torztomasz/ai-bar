@@ -61,6 +61,24 @@ import Testing
         #expect(store.samples() == [recent, newest])
     }
 
+    @Test func recordingAWindowStoresItsReadingAtTheGivenTime() {
+        let store = SampleStore(fileURL: fileURL)
+
+        store.record(.fiveHour(percent: 30, resetsAt: resetsAt), at: start.addingTimeInterval(600))
+
+        #expect(store.samples() == [UsageSample(at: start.addingTimeInterval(600), percentUsed: 30)])
+    }
+
+    // Ten minutes past the reported reset the provider has not caught up: the 90% describes a window that is over,
+    // and if kept it could land inside the next window and inflate its pace.
+    @Test func recordingAWindowPastItsResetKeepsNothing() {
+        let store = SampleStore(fileURL: fileURL)
+
+        store.record(.fiveHour(percent: 90, resetsAt: resetsAt), at: resetsAt.addingTimeInterval(600))
+
+        #expect(store.samples().isEmpty)
+    }
+
     @Test func clearForgetsSamplesAcrossReopening() {
         let store = SampleStore(fileURL: fileURL)
         store.append(UsageSample(at: start.addingTimeInterval(600), percentUsed: 10), resetsAt: resetsAt)

@@ -119,7 +119,7 @@ import Testing
     // Polled 10 minutes after the reported reset: the provider has not caught up, so its reading and reset time
     // describe a window that is over. Even a 100% reading must not paint the badge red.
     @Test func windowPastItsResetTimeHasNoForecast() {
-        let window = fiveHour(percent: 100, resetsAt: FixtureWindow.resetsAt)
+        let window = UsageWindow.fiveHour(percent: 100, resetsAt: FixtureWindow.resetsAt)
         let polledAt = time(hours: 5 + 1.0 / 6)
 
         let forecast = DrainEstimator().forecast(for: window, samples: [sample(hours: 4, 100)], now: polledAt)
@@ -130,17 +130,13 @@ import Testing
 
     // A current window forecasts exactly as the estimator does: the gentle single-sample case, 12%/h, 60% at reset.
     @Test func windowBeforeItsResetTimeIsForecastNormally() {
-        let window = fiveHour(percent: 30, resetsAt: FixtureWindow.resetsAt)
+        let window = UsageWindow.fiveHour(percent: 30, resetsAt: FixtureWindow.resetsAt)
 
         let forecast = DrainEstimator().forecast(for: window, samples: [sample(hours: 2.5, 30)], now: time(hours: 2.5))
 
         #expect(!window.isPastReset(now: time(hours: 2.5)))
         #expect(forecast.outlook == .willLast)
         #expect(forecast.projectedPercentAtReset == 60)
-    }
-
-    private func fiveHour(percent: Double, resetsAt: Date?) -> UsageWindow {
-        UsageWindow(id: "session", kind: .fiveHour, title: "5-hour", percentUsed: percent, resetsAt: resetsAt)
     }
 }
 

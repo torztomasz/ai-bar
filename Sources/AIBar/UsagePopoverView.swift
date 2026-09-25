@@ -24,29 +24,19 @@ struct UsagePopoverView: View {
 
     private func footer(now: Date) -> some View {
         HStack {
-            Text(UsageText.updated(oldestRefresh, now: now))
+            Text(UsageText.updated(controller.oldestRefresh, now: now))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            if isRefreshing {
+            if controller.isRefreshing {
                 ProgressView().controlSize(.small)
             }
             Button("Refresh") {
                 Task { await controller.refresh() }
             }
-            .disabled(isRefreshing)
+            .disabled(controller.isRefreshing)
             Button("Quit", action: onQuit)
         }
-    }
-
-    /// The footer vouches for all the data shown, so it reports the stalest provider; nil if one never refreshed.
-    private var oldestRefresh: Date? {
-        let refreshes = controller.states.map(\.lastRefreshedAt)
-        return refreshes.contains(nil) ? nil : refreshes.compactMap { $0 }.min()
-    }
-
-    private var isRefreshing: Bool {
-        controller.states.contains(where: \.isRefreshing)
     }
 }
 

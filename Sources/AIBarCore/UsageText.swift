@@ -10,6 +10,8 @@ public enum UsageText {
     }
 
     /// E.g. "Claude 5-hour: 42% · resets in 2h 13m · projected 71% at reset"; parts without data are left out.
+    /// A failed refresh is appended because the badge keeps showing the last reading, which would otherwise look
+    /// current.
     public static func tooltip(providerName: String, primaryWindow: UsageWindow?, forecast: DrainForecast?,
                                errorDescription: String?, now: Date) -> String {
         guard let primaryWindow else {
@@ -21,6 +23,9 @@ public enum UsageText {
         }
         if let projected = forecast?.projectedPercentAtReset {
             parts.append("projected \(percent(projected)) at reset")
+        }
+        if let errorDescription {
+            parts.append("last refresh failed: \(errorDescription)")
         }
         return parts.joined(separator: " · ")
     }

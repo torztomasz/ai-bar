@@ -24,6 +24,13 @@ public final class SampleStore: Sendable {
         return SampleStore(fileURL: fileURL)
     }
 
+    /// Stores `window`'s reading as observed at `now`. A window past its reset is skipped: the provider has not
+    /// caught up, so the reading belongs to a window that is over and could skew the next one's pace.
+    public func record(_ window: UsageWindow, at now: Date) {
+        guard !window.isPastReset(now: now) else { return }
+        append(UsageSample(at: now, percentUsed: window.percentUsed), resetsAt: window.resetsAt)
+    }
+
     /// Keeps only samples inside the current window, `sample` included, so the file stays bounded. Without
     /// `resetsAt` the window start is unknown, so anything more than one window length older than `sample` goes.
     public func append(_ sample: UsageSample, resetsAt: Date?) {

@@ -1,7 +1,7 @@
 import Foundation
 
-/// Returns a canned snapshot, optionally after a delay. Lives in Core rather than the test target so it can stand in
-/// for a real provider outside tests too (e.g. SwiftUI previews), and so a delay can exercise loading states.
+/// Returns a canned snapshot, optionally after a delay, so code that consumes providers can be exercised without the
+/// network; the delay exercises loading states.
 public struct FakeUsageProvider: UsageProvider {
     public let displayName: String
     public let snapshot: UsageSnapshot
@@ -24,7 +24,7 @@ public struct FakeUsageProvider: UsageProvider {
 }
 
 extension UsageSnapshot {
-    /// Plausible data covering every window kind, for tests and previews.
+    /// Plausible data covering every window kind.
     public static func sample(fetchedAt: Date) -> UsageSnapshot {
         UsageSnapshot(
             provider: ProviderID("fake"),

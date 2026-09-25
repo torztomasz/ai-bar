@@ -2,8 +2,9 @@ import Foundation
 import Testing
 @testable import AIBarCore
 
-// Method: every time is an offset from one fixed `now` (no `Date()`), written out in hours, minutes and seconds so
-// the expected wording can be read straight off the offset.
+// Method (all suites in this file): every time is an offset from one fixed `now` (no `Date()`), written out in
+// hours, minutes and seconds so the expected wording can be read straight off the offset, and each test asserts on
+// the exact string the user would read.
 @Suite struct ResetCountdownText {
     // Seconds are dropped, not rounded up, so the countdown never claims more time than is left.
     @Test func showsHoursAndMinutesLeft() {
@@ -68,14 +69,13 @@ import Testing
     }
 
     private func line(_ outlook: DrainOutlook) -> String {
-        let forecast = DrainForecast(outlook: outlook, projectedPercentAtReset: nil, ratePercentPerHour: nil)
-        return UsageText.forecast(forecast, locale: Locale(identifier: "en_GB"), timeZone: .gmt)
+        UsageText.forecast(.verdict(outlook), locale: Locale(identifier: "en_GB"), timeZone: .gmt)
     }
 }
 
 @Suite struct StatusItemTooltip {
     @Test func spellsOutPercentResetAndProjection() {
-        let window = fiveHour(percent: 42, resetsAt: after(hours: 2, minutes: 13))
+        let window = UsageWindow.fiveHour(percent: 42, resetsAt: after(hours: 2, minutes: 13))
         let forecast = DrainForecast(outlook: .willLast, projectedPercentAtReset: 71.2, ratePercentPerHour: 12)
 
         #expect(tooltip(window, forecast) == "Claude 5-hour: 42% · resets in 2h 13m · projected 71% at reset")
@@ -83,7 +83,7 @@ import Testing
 
     // Parts the data cannot back are left out instead of shown as placeholders.
     @Test func omitsResetAndProjectionWhenUnknown() {
-        #expect(tooltip(fiveHour(percent: 42, resetsAt: nil), nil) == "Claude 5-hour: 42%")
+        #expect(tooltip(.fiveHour(percent: 42, resetsAt: nil), nil) == "Claude 5-hour: 42%")
     }
 
     @Test func explainsAFailureWhenThereIsNoData() {
@@ -93,6 +93,14 @@ import Testing
         #expect(text == "Claude: Sign in to Claude Code to see usage.")
     }
 
+    // The badge keeps the last reading after a failed refresh, so the tooltip is where the user learns it is stale.
+    @Test func flagsAFailedRefreshAfterTheLastReading() {
+        let text = UsageText.tooltip(providerName: "Claude", primaryWindow: .fiveHour(percent: 42), forecast: nil,
+                                     errorDescription: "Can't reach Claude.", now: now)
+
+        #expect(text == "Claude 5-hour: 42% · last refresh failed: Can't reach Claude.")
+    }
+
     @Test func saysWhenThereIsNoDataYet() {
         #expect(tooltip(nil, nil) == "Claude: no usage data yet")
     }
@@ -100,10 +108,6 @@ import Testing
     private func tooltip(_ window: UsageWindow?, _ forecast: DrainForecast?) -> String {
         UsageText.tooltip(providerName: "Claude", primaryWindow: window, forecast: forecast, errorDescription: nil,
                           now: now)
-    }
-
-    private func fiveHour(percent: Double, resetsAt: Date?) -> UsageWindow {
-        UsageWindow(id: "session", kind: .fiveHour, title: "5-hour", percentUsed: percent, resetsAt: resetsAt)
     }
 }
 
