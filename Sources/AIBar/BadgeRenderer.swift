@@ -2,13 +2,17 @@ import AIBarCore
 import AppKit
 
 /// Draws the menu bar badge as an image rather than a button title, because a title cannot carry a
-/// coloured rounded background.
+/// coloured capsule background.
+///
+/// The capsule copies the system camera indicator that sits beside it, so the two read as one family. Its size was
+/// measured in `tickets/005-reference-camera-pill.png`, which is 1 px per point (the 18 pt badge of the time is
+/// 18 px tall there): the pill is 24 pt tall and its glyph sits about 11 pt in from either end.
 @MainActor
 enum BadgeRenderer {
     private static let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
-    private static let height: CGFloat = 18
-    private static let horizontalPadding: CGFloat = 5
-    private static let cornerRadius: CGFloat = 4
+    private static let height: CGFloat = 24
+    private static let horizontalPadding: CGFloat = 11
+    private static let cornerRadius = height / 2
 
     static func image(text: String, tint: BadgeTint) -> NSImage {
         let textSize = (text as NSString).size(withAttributes: [.font: font])
@@ -32,7 +36,7 @@ enum BadgeRenderer {
     }
 }
 
-// A coloured pill makes the forecast readable at a glance; neutral stays plain text like other menu bar items.
+// A coloured capsule makes the forecast readable at a glance; neutral stays plain text like other menu bar items.
 extension BadgeTint {
     fileprivate var backgroundColor: NSColor? {
         switch self {
