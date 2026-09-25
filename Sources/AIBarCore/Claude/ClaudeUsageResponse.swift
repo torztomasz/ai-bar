@@ -1,6 +1,9 @@
 import Foundation
 
 /// The subset of `GET /api/oauth/usage` the app reads.
+///
+/// Every field is optional because the endpoint is undocumented and sends `null` freely: a window missing what
+/// the app needs is skipped instead of failing the whole response.
 struct ClaudeUsageResponse: Decodable {
     /// The structured form and the source of truth when present.
     let limits: [Limit]?
@@ -9,8 +12,8 @@ struct ClaudeUsageResponse: Decodable {
     let sevenDay: LegacyWindow?
 
     struct Limit: Decodable {
-        let kind: String
-        let percent: Double
+        let kind: String?
+        let percent: Double?
         let resetsAt: String?
         let scope: Scope?
     }
@@ -24,39 +27,34 @@ struct ClaudeUsageResponse: Decodable {
     }
 
     struct LegacyWindow: Decodable {
-        let utilization: Double
+        let utilization: Double?
         let resetsAt: String?
     }
 
     var windows: [UsageWindow] {
         if let limits, !limits.isEmpty {
-            return inDisplayOrder(limits.map(\.window))
+            return inDisplayOrder(limits.compactMap(\.window))
         }
         return legacyWindows
     }
 
     private var legacyWindows: [UsageWindow] {
         [
-            fiveHour.map {
-                UsageWindow(id: "session", kind: .fiveHour, title: "5-hour", percentUsed: $0.utilization,
-                            resetsAt: $0.resetsAt.flatMap(parseResetDate))
-            },
-            sevenDay.map {
-                UsageWindow(id: "weekly_all", kind: .weekly, title: "Weekly", percentUsed: $0.utilization,
-                            resetsAt: $0.resetsAt.flatMap(parseResetDate))
-            },
+            fiveHour?.window(id: "session", kind: .fiveHour, title: "5-hour"),
+            sevenDay?.window(id: "weekly_all", kind: .weekly, title: "Weekly"),
         ].compactMap { $0 }
     }
 }
 
 extension ClaudeUsageResponse.Limit {
-    var window: UsageWindow {
-        let (id, kind, title) = identity
-        return UsageWindow(id: id, kind: kind, title: title, percentUsed: percent,
+    var window: UsageWindow? {
+        guard let kind, let percent else { return nil }
+        let (id, windowKind, title) = identity(kind: kind)
+        return UsageWindow(id: id, kind: windowKind, title: title, percentUsed: percent,
                            resetsAt: resetsAt.flatMap(parseResetDate))
     }
 
-    private var identity: (id: String, kind: UsageWindow.Kind, title: String) {
+    private func identity(kind: String) -> (id: String, kind: UsageWindow.Kind, title: String) {
         switch (kind, scope?.model?.displayName) {
         case ("session", _):
             ("session", .fiveHour, "5-hour")
@@ -67,6 +65,16 @@ extension ClaudeUsageResponse.Limit {
         default:
             (kind, .other, kind)
         }
+    }
+}
+
+extension ClaudeUsageResponse.LegacyWindow {
+    /// Legacy windows take the ids of their `limits` counterparts so a window keeps its identity
+    /// whichever shape the server sends.
+    func window(id: String, kind: UsageWindow.Kind, title: String) -> UsageWindow? {
+        guard let utilization else { return nil }
+        return UsageWindow(id: id, kind: kind, title: title, percentUsed: utilization,
+                           resetsAt: resetsAt.flatMap(parseResetDate))
     }
 }
 
