@@ -1,8 +1,8 @@
 import AIBarCore
 import AppKit
 
-/// Owns the usage data: polls every provider, records the 5-hour readings, forecasts the drain, and publishes
-/// the result for the badge and the popover.
+/// Owns the usage data: polls every provider, forecasts every window's drain from its recorded readings, and
+/// publishes the result for the badge and the popover.
 @MainActor
 final class UsageController: ObservableObject {
     /// Often enough that the badge tracks a busy session, rare enough to stay far from the endpoint's rate limits.
@@ -17,13 +17,11 @@ final class UsageController: ObservableObject {
     var onStatesChanged: ([ProviderState]) -> Void = { _ in }
 
     private let providers: [any UsageProvider]
-    private let sampleStores: [ProviderID: SampleStore]
-    private let estimator = DrainEstimator()
+    private let forecaster = WindowForecaster.inApplicationSupport()
     private var pollingTask: Task<Void, Never>?
 
     init(providers: [any UsageProvider]) {
         self.providers = providers
-        sampleStores = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, SampleStore.defaultStore(for: $0.id)) })
         states = providers.map { ProviderState(id: $0.id, displayName: $0.displayName) }
     }
 
@@ -84,7 +82,7 @@ final class UsageController: ObservableObject {
         switch result {
         case .success(let snapshot):
             state.snapshot = snapshot
-            state.forecast = forecastPrimaryWindow(of: snapshot, store: sampleStores[state.id])
+            state.forecasts = forecaster.forecasts(for: snapshot)
             state.lastError = nil
         case .failure(let error):
             state.lastError = error
@@ -96,13 +94,6 @@ final class UsageController: ObservableObject {
         // One assignment so observers see a single, consistent change.
         states[index] = state
     }
-
-    /// Records the reading before forecasting so the estimate includes it.
-    private func forecastPrimaryWindow(of snapshot: UsageSnapshot, store: SampleStore?) -> DrainForecast? {
-        guard let primary = snapshot.primaryWindow, let store else { return nil }
-        store.record(primary, at: snapshot.fetchedAt)
-        return estimator.forecast(for: primary, samples: store.samples(), now: snapshot.fetchedAt)
-    }
 }
 
 /// What the app knows about one provider after its latest refresh.
@@ -111,14 +102,19 @@ struct ProviderState: Identifiable {
     let displayName: String
     /// The last successful fetch; kept through failures.
     var snapshot: UsageSnapshot?
-    /// For the primary window of `snapshot`; nil when it has none.
-    var forecast: DrainForecast?
+    /// For the windows of `snapshot`; a window of unknown length has none.
+    var forecasts: [UsageWindow.ID: DrainForecast] = [:]
     /// Cleared by the next successful fetch.
     var lastError: (any Error)?
     var isRefreshing = false
 
     /// Derived rather than stored so it can never disagree with the snapshot it describes.
     var lastRefreshedAt: Date? { snapshot?.fetchedAt }
+
+    /// The badge's forecast, for the same window the badge shows.
+    var primaryForecast: DrainForecast? {
+        snapshot?.primaryWindow.flatMap { forecasts[$0.id] }
+    }
 }
 
 private func fetchResult(from provider: any UsageProvider) async -> Result<UsageSnapshot, any Error> {

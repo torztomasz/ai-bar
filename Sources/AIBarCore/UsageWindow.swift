@@ -21,6 +21,16 @@ public struct UsageWindow: Equatable, Sendable, Identifiable {
         case weeklyModel(name: String)
         /// A window the app does not understand yet; kept so data a provider adds later is still shown.
         case other
+
+        /// How long a window of this kind runs from opening to reset; `nil` for a window the app does not
+        /// understand, which therefore cannot be forecast.
+        public var length: TimeInterval? {
+            switch self {
+            case .fiveHour: RollingWindow.fiveHours
+            case .weekly, .weeklyModel: RollingWindow.week
+            case .other: nil
+            }
+        }
     }
 
     public init(id: String, kind: Kind, title: String, percentUsed: Double, resetsAt: Date?) {

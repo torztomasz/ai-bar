@@ -1,8 +1,8 @@
 import AIBarCore
 import SwiftUI
 
-/// Popover shown on left click: every provider's windows with reset times, the 5-hour forecast, and a footer to
-/// refresh or quit.
+/// Popover shown on left click: every provider's windows with reset times and forecasts, and a footer to refresh or
+/// quit.
 struct UsagePopoverView: View {
     @ObservedObject var controller: UsageController
     let onQuit: () -> Void
@@ -56,23 +56,19 @@ private struct ProviderSection: View {
             }
             if let snapshot = state.snapshot {
                 ForEach(snapshot.windows) { window in
-                    WindowRow(window: window, forecastLine: forecastLine(for: window, in: snapshot), now: now)
+                    WindowRow(window: window, forecast: state.forecasts[window.id], now: now)
                 }
             } else if state.lastError == nil {
                 Text("Loading usage…").foregroundStyle(.secondary)
             }
         }
     }
-
-    /// Only the primary window is forecast.
-    private func forecastLine(for window: UsageWindow, in snapshot: UsageSnapshot) -> String? {
-        window.id == snapshot.primaryWindow?.id ? UsageText.forecast(state.forecast) : nil
-    }
 }
 
 private struct WindowRow: View {
     let window: UsageWindow
-    let forecastLine: String?
+    /// `nil` for a window that cannot be forecast, which then shows no forecast line.
+    let forecast: DrainForecast?
     let now: Date
 
     var body: some View {
@@ -87,8 +83,8 @@ private struct WindowRow: View {
             HStack {
                 Text(UsageText.resetsIn(window.resetsAt, now: now))
                 Spacer()
-                if let forecastLine {
-                    Text(forecastLine)
+                if let forecast {
+                    Text(UsageText.forecast(forecast, for: window.kind))
                 }
             }
             .font(.caption)

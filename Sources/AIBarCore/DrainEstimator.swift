@@ -1,6 +1,7 @@
 import Foundation
 
-/// Decides whether the 5-hour window will be used up before it resets, from the usage samples seen so far.
+/// Decides whether a rolling usage window (5-hour or weekly) will be used up before it resets, from the usage samples
+/// seen so far.
 ///
 /// The window opens on the first request, so usage at its start is 0% by definition. That start
 /// (`resetsAt - windowLength`) serves as an implicit `(start, 0%)` anchor, which is why a single observation is
@@ -12,13 +13,13 @@ import Foundation
 public struct DrainEstimator {
     public let windowLength: TimeInterval
 
-    public init(windowLength: TimeInterval = SessionWindow.defaultLength) {
+    public init(windowLength: TimeInterval = RollingWindow.fiveHours) {
         self.windowLength = windowLength
     }
 
     public func forecast(samples: [UsageSample], resetsAt: Date?, now: Date) -> DrainForecast {
         guard let resetsAt else { return forecastWithoutReset(samples: samples, now: now) }
-        let windowStart = SessionWindow.start(resetsAt: resetsAt, length: windowLength)
+        let windowStart = RollingWindow.start(resetsAt: resetsAt, length: windowLength)
         let inWindow = samples.filter { $0.at >= windowStart && $0.at <= min(now, resetsAt) }
         guard let latest = inWindow.latest else { return .unknown }
 
@@ -36,7 +37,7 @@ public struct DrainEstimator {
             return DrainForecast(outlook: .willLast, projectedPercentAtReset: projected, ratePercentPerHour: rate)
         }
         let drainsAt = latest.at.addingTimeInterval(
-            (limitPercent - latest.percentUsed) / rate * SessionWindow.secondsPerHour)
+            (limitPercent - latest.percentUsed) / rate * RollingWindow.secondsPerHour)
         return DrainForecast(outlook: .willDrain(at: max(drainsAt, now)), projectedPercentAtReset: projected,
                              ratePercentPerHour: rate)
     }
@@ -100,5 +101,5 @@ private func leastSquaresRatePerHour(through samples: [UsageSample]) -> Double? 
 }
 
 private func hours(from start: Date, to end: Date) -> Double {
-    end.timeIntervalSince(start) / SessionWindow.secondsPerHour
+    end.timeIntervalSince(start) / RollingWindow.secondsPerHour
 }

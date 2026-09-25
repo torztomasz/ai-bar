@@ -48,12 +48,17 @@ public enum UsageText {
         }
     }
 
-    /// The drain time is a clock reading in the user's locale and time zone; tests pin both.
-    public static func forecast(_ forecast: DrainForecast?, locale: Locale = .current,
+    /// The drain time is a clock reading in the user's locale and time zone; tests pin both. A window longer than a
+    /// day can drain days from now, so its drain time carries the day as well.
+    public static func forecast(_ forecast: DrainForecast?, for kind: UsageWindow.Kind, locale: Locale = .current,
                                 timeZone: TimeZone = .current) -> String {
         switch forecast?.outlook {
         case .willLast:
             return "On pace to last"
+        case .willDrain(let at) where kind.spansDays:
+            var style = Date.FormatStyle(locale: locale).weekday(.abbreviated).day().month(.abbreviated).hour().minute()
+            style.timeZone = timeZone
+            return "Drains \(at.formatted(style))"
         case .willDrain(let at):
             var style = Date.FormatStyle(date: .omitted, time: .shortened, locale: locale)
             style.timeZone = timeZone
@@ -78,4 +83,8 @@ public enum UsageText {
         if hours > 0 { return "\(hours)h \(minutes)m" }
         return "\(minutes)m"
     }
+}
+
+private extension UsageWindow.Kind {
+    var spansDays: Bool { (length ?? 0) > 24 * RollingWindow.secondsPerHour }
 }

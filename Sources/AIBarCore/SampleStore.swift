@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Keeps one provider's usage samples on disk so the drain forecast survives app restarts.
+/// Keeps one usage window's samples on disk so the drain forecast survives app restarts.
 ///
 /// Persistence is best effort: failures are logged, never thrown, because losing history only makes the forecast
 /// start over, while an error would break the app.
@@ -10,18 +10,10 @@ public final class SampleStore: Sendable {
     public let windowLength: TimeInterval
     private let lockedSamples: OSAllocatedUnfairLock<[UsageSample]>
 
-    public init(fileURL: URL, windowLength: TimeInterval = SessionWindow.defaultLength) {
+    public init(fileURL: URL, windowLength: TimeInterval = RollingWindow.fiveHours) {
         self.fileURL = fileURL
         self.windowLength = windowLength
         lockedSamples = OSAllocatedUnfairLock(initialState: Self.load(from: fileURL))
-    }
-
-    /// `~/Library/Application Support/AI Bar/samples-<provider>.json`; directories are created on first save.
-    public static func defaultStore(for provider: ProviderID) -> SampleStore {
-        let fileURL = URL.applicationSupportDirectory
-            .appending(path: "AI Bar", directoryHint: .isDirectory)
-            .appending(path: "samples-\(provider.rawValue).json", directoryHint: .notDirectory)
-        return SampleStore(fileURL: fileURL)
     }
 
     /// Stores `window`'s reading as observed at `now`. A window past its reset is skipped: the provider has not
@@ -36,7 +28,7 @@ public final class SampleStore: Sendable {
     public func append(_ sample: UsageSample, resetsAt: Date?) {
         // Saving inside the lock keeps concurrent appends from overwriting the file with an older list.
         lockedSamples.withLock { samples in
-            let windowStart = SessionWindow.start(resetsAt: resetsAt ?? sample.at, length: windowLength)
+            let windowStart = RollingWindow.start(resetsAt: resetsAt ?? sample.at, length: windowLength)
             samples.append(sample)
             samples.removeAll { $0.at < windowStart }
             save(samples)

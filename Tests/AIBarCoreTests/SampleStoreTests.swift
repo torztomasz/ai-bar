@@ -106,14 +106,6 @@ import Testing
 
         #expect(store.samples() == [sample])
     }
-
-    // Only the location is checked, so the test never writes to the real history.
-    @Test func defaultStoreKeepsOneFilePerProviderInApplicationSupport() {
-        let store = SampleStore.defaultStore(for: ProviderID("claude"))
-        let path = store.fileURL.path(percentEncoded: false)
-
-        #expect(path.hasSuffix("/Library/Application Support/AI Bar/samples-claude.json"))
-    }
 }
 
 private let resetsAt = FixtureWindow.resetsAt

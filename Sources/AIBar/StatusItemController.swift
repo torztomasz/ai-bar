@@ -34,9 +34,11 @@ final class StatusItemController: NSObject {
     private func render() {
         let primaryWindow = shownState?.snapshot?.primaryWindow
         let text = UsageText.badge(primaryWindow: primaryWindow, hasError: shownState?.lastError != nil)
-        statusItem.button?.image = BadgeRenderer.image(text: text, tint: BadgeTint(forecast: shownState?.forecast))
+        let tint = BadgeTint(forecast: shownState?.primaryForecast)
+        statusItem.button?.image = BadgeRenderer.image(text: text, tint: tint)
         statusItem.button?.toolTip = shownState.map { state in
-            UsageText.tooltip(providerName: state.displayName, primaryWindow: primaryWindow, forecast: state.forecast,
+            UsageText.tooltip(providerName: state.displayName, primaryWindow: primaryWindow,
+                              forecast: state.primaryForecast,
                               errorDescription: state.lastError?.localizedDescription, now: Date())
         }
     }

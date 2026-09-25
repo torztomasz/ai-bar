@@ -53,23 +53,33 @@ import Testing
     }
 }
 
-// `now` is 08:00 UTC; the drain time is formatted in UTC with a 24-hour locale so the expected clock reading is fixed.
+// `now` is Friday 15 January 2027, 08:00 UTC; drain times are formatted in UTC with a 24-hour British locale so the
+// expected wording is fixed.
 @Suite struct ForecastLineText {
     @Test func windowThatWillLastSaysSo() {
-        #expect(line(.willLast) == "On pace to last")
+        #expect(line(.willLast, for: .fiveHour) == "On pace to last")
     }
 
-    @Test func windowThatWillDrainShowsTheClockTime() {
-        #expect(line(.willDrain(at: after(hours: 6, minutes: 35))) == "Drains at 14:35")
+    // A 5-hour window drains within hours, so the clock time alone is unambiguous.
+    @Test func fiveHourWindowThatWillDrainShowsTheClockTime() {
+        #expect(line(.willDrain(at: after(hours: 6, minutes: 35)), for: .fiveHour) == "Drains at 14:35")
+    }
+
+    // A weekly window can drain days from now, when the clock time alone would suggest today.
+    @Test func weeklyWindowThatWillDrainShowsTheDayToo() {
+        let drainsAt = after(hours: 2 * 24 + 6)
+
+        #expect(line(.willDrain(at: drainsAt), for: .weekly) == "Drains Sun 17 Jan at 14:00")
+        #expect(line(.willDrain(at: drainsAt), for: .weeklyModel(name: "Fable")) == "Drains Sun 17 Jan at 14:00")
     }
 
     @Test func unknownOrMissingForecastAsksForPatience() {
-        #expect(line(.unknown) == "Not enough data")
-        #expect(UsageText.forecast(nil) == "Not enough data")
+        #expect(line(.unknown, for: .fiveHour) == "Not enough data")
+        #expect(UsageText.forecast(nil, for: .weekly) == "Not enough data")
     }
 
-    private func line(_ outlook: DrainOutlook) -> String {
-        UsageText.forecast(.verdict(outlook), locale: Locale(identifier: "en_GB"), timeZone: .gmt)
+    private func line(_ outlook: DrainOutlook, for kind: UsageWindow.Kind) -> String {
+        UsageText.forecast(.verdict(outlook), for: kind, locale: Locale(identifier: "en_GB"), timeZone: .gmt)
     }
 }
 
