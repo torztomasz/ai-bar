@@ -1,10 +1,11 @@
 import AIBarCore
 import SwiftUI
 
-/// Popover shown on left click: every provider's windows with reset times and forecasts, and a footer to refresh or
-/// quit.
+/// Popover shown on left click: every provider's windows with reset times and forecasts, and a footer to refresh,
+/// open Settings or quit.
 struct UsagePopoverView: View {
     @ObservedObject var controller: UsageController
+    let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
     var body: some View {
@@ -35,6 +36,13 @@ struct UsagePopoverView: View {
                 Task { await controller.refresh() }
             }
             .disabled(controller.isRefreshing)
+            // ⌘, is the standard Settings shortcut; an accessory app has no menu bar to carry it, so the button does.
+            Button(action: onOpenSettings) {
+                Label("Settings", systemImage: "gear").labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderless)
+            .help("Settings")
+            .keyboardShortcut(",", modifiers: .command)
             Button("Quit", action: onQuit)
         }
     }

@@ -26,6 +26,12 @@ the reset time yields the projected usage. Readings are stored per window under
 `~/Library/Application Support/AI Bar/` so the estimate survives restarts. The 5-hour window is
 5 hours long, the weekly windows are 7 days.
 
+## Settings
+
+The gear in the popover (or ⌘, while it is open) opens Settings: launch at login, how often to refresh
+(1 to 15 minutes, default 5), and which window the pill shows. Changes apply at once and are kept in the
+app's user defaults (`defaults read com.torz.aibar`).
+
 ## How the data is fetched
 
 Claude Code stores its OAuth token in the login Keychain under `Claude Code-credentials`. AI Bar

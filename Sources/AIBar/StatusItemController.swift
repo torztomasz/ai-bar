@@ -10,10 +10,13 @@ final class StatusItemController: NSObject {
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
+    /// Source of the window the badge shows.
+    private let settings: SettingsStore
     private var shownState: ProviderState?
     private var tooltipClock: Timer?
 
-    init(popoverContent: some View) {
+    init(popoverContent: some View, settings: SettingsStore) {
+        self.settings = settings
         super.init()
         popover.behavior = .transient
         let hostingController = NSHostingController(rootView: popoverContent)
@@ -32,15 +35,26 @@ final class StatusItemController: NSObject {
         render()
     }
 
+    /// The badge may now show another window.
+    func settingsDidChange() {
+        render()
+    }
+
+    /// Makes way for the Settings window, which the popover would otherwise cover.
+    func closePopover() {
+        popover.performClose(nil)
+    }
+
+    /// Text, tint and tooltip all describe the window chosen in settings, so a weekly badge is coloured by the weekly
+    /// forecast.
     private func render() {
-        let primaryWindow = shownState?.snapshot?.primaryWindow
-        let text = UsageText.badge(primaryWindow: primaryWindow, hasError: shownState?.lastError != nil)
-        let tint = BadgeTint(forecast: shownState?.primaryForecast)
+        let window = shownState?.snapshot?.window(for: settings.settings.badgeWindowID)
+        let forecast = window.flatMap { shownState?.forecasts[$0.id] }
+        let text = UsageText.badge(primaryWindow: window, hasError: shownState?.lastError != nil)
         let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))
-        statusItem.button?.image = BadgeRenderer.image(text: text, tint: tint, height: height)
+        statusItem.button?.image = BadgeRenderer.image(text: text, tint: BadgeTint(forecast: forecast), height: height)
         statusItem.button?.toolTip = shownState.map { state in
-            UsageText.tooltip(providerName: state.displayName, primaryWindow: primaryWindow,
-                              forecast: state.primaryForecast,
+            UsageText.tooltip(providerName: state.displayName, primaryWindow: window, forecast: forecast,
                               errorDescription: state.lastError?.localizedDescription, now: Date())
         }
     }

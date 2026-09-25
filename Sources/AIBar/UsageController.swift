@@ -5,9 +5,6 @@ import AppKit
 /// publishes the result for the badge and the popover.
 @MainActor
 final class UsageController: ObservableObject {
-    /// Often enough that the badge tracks a busy session, rare enough to stay far from the endpoint's rate limits.
-    private static let pollInterval: Duration = .seconds(5 * 60)
-
     /// One entry per provider, in the order the popover lists them.
     @Published private(set) var states: [ProviderState] {
         didSet { onStatesChanged(states) }
@@ -17,11 +14,16 @@ final class UsageController: ObservableObject {
     var onStatesChanged: ([ProviderState]) -> Void = { _ in }
 
     private let providers: [any UsageProvider]
+    /// Source of the poll interval.
+    private let settings: SettingsStore
     private let forecaster = WindowForecaster.inApplicationSupport()
     private var pollingTask: Task<Void, Never>?
+    /// The interval `pollingTask` sleeps for, to tell a changed interval from any other settings change.
+    private var pollingInterval: Duration?
 
-    init(providers: [any UsageProvider]) {
+    init(providers: [any UsageProvider], settings: SettingsStore) {
         self.providers = providers
+        self.settings = settings
         states = providers.map { ProviderState(id: $0.id, displayName: $0.displayName) }
     }
 
@@ -36,17 +38,11 @@ final class UsageController: ObservableObject {
         states.contains(where: \.isRefreshing)
     }
 
-    /// Refreshes now and every poll interval after, and again on wake because a sleeping Mac misses polls and
+    /// Refreshes now and every refresh interval after, and again on wake because a sleeping Mac misses polls and
     /// the reading it last showed may be hours old. Calling it again does nothing.
     func start() {
         guard pollingTask == nil else { return }
-        pollingTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                await refresh()
-                try? await Task.sleep(for: Self.pollInterval)
-            }
-        }
+        startPolling(refreshingFirst: true)
         // The notification center keeps the observer for the app's lifetime, which is this controller's lifetime.
         _ = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
@@ -55,9 +51,17 @@ final class UsageController: ObservableObject {
         }
     }
 
+    /// A new interval starts counting from now instead of after the old one runs out, so going from 15 minutes to 1
+    /// takes effect within a minute.
+    func settingsDidChange() {
+        guard pollingTask != nil, settings.settings.refreshInterval != pollingInterval else { return }
+        startPolling(refreshingFirst: false)
+    }
+
     /// Fetches every provider concurrently. A provider still busy with an earlier refresh is skipped rather than
     /// asked twice. A failed fetch keeps the previous snapshot, so the badge shows the last known reading.
     func refresh() async {
+        Log.app.notice("refreshing usage")
         let due = states.indices.filter { !states[$0].isRefreshing }
         // Marked on a copy so observers redraw once, not once per provider.
         var marked = states
@@ -72,6 +76,23 @@ final class UsageController: ObservableObject {
             }
             for await (index, result) in group {
                 apply(result, toProviderAt: index)
+            }
+        }
+    }
+
+    private func startPolling(refreshingFirst: Bool) {
+        pollingTask?.cancel()
+        let interval = settings.settings.refreshInterval
+        pollingInterval = interval
+        Log.app.notice("refreshing usage every \(interval.components.seconds / 60) min")
+        pollingTask = Task { [weak self] in
+            if refreshingFirst {
+                await self?.refresh()
+            }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled, let self else { return }
+                await refresh()
             }
         }
     }
@@ -110,11 +131,6 @@ struct ProviderState: Identifiable {
 
     /// Derived rather than stored so it can never disagree with the snapshot it describes.
     var lastRefreshedAt: Date? { snapshot?.fetchedAt }
-
-    /// The badge's forecast, for the same window the badge shows.
-    var primaryForecast: DrainForecast? {
-        snapshot?.primaryWindow.flatMap { forecasts[$0.id] }
-    }
 }
 
 private func fetchResult(from provider: any UsageProvider) async -> Result<UsageSnapshot, any Error> {
