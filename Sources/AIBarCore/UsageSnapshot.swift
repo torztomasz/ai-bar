@@ -13,9 +13,16 @@ public struct UsageSnapshot: Equatable, Sendable {
         self.windows = windows
     }
 
-    /// The window the menu bar badge shows: the 5-hour one, because it is the limit a user runs into mid-session.
+    /// The window the menu bar badge shows unless the user picks another: the 5-hour one, because it is the limit a
+    /// user runs into mid-session.
     public var primaryWindow: UsageWindow? {
         windows.first { $0.kind == .fiveHour }
+    }
+
+    /// The badge's window for the user's choice `id`; nil, or an id this snapshot no longer reports, means the
+    /// primary window.
+    public func window(for id: String?) -> UsageWindow? {
+        windows.first { $0.id == id } ?? primaryWindow
     }
 }
 

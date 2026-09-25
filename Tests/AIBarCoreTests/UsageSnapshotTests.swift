@@ -23,6 +23,27 @@ import Testing
     }
 }
 
+// Method: a snapshot with a 5-hour and a weekly window, asked for ids that are present, absent, or nil, asserting on
+// which window the badge would show.
+@Suite struct BadgeWindowSelection {
+    private let fiveHour = window("session", kind: .fiveHour)
+    private let weekly = window("weekly_all", kind: .weekly)
+
+    @Test func picksTheWindowWithTheChosenID() {
+        #expect(snapshot(windows: [fiveHour, weekly]).window(for: "weekly_all") == weekly)
+    }
+
+    @Test func noChoiceMeansThePrimaryWindow() {
+        #expect(snapshot(windows: [weekly, fiveHour]).window(for: nil) == fiveHour)
+    }
+
+    // The chosen window can disappear, e.g. a per-model weekly cap the provider stops reporting; the badge must
+    // still show something.
+    @Test func unknownIDFallsBackToThePrimaryWindow() {
+        #expect(snapshot(windows: [weekly, fiveHour]).window(for: "weekly_scoped:Gone") == fiveHour)
+    }
+}
+
 private func window(_ id: String, kind: UsageWindow.Kind) -> UsageWindow {
     UsageWindow(id: id, kind: kind, title: id, percentUsed: 10, resetsAt: nil)
 }
