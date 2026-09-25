@@ -10,13 +10,12 @@ final class StatusItemController: NSObject {
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
-    /// Source of the window the badge shows.
-    private let settings: SettingsStore
+    private let settingsStore: SettingsStore
     private var shownState: ProviderState?
     private var tooltipClock: Timer?
 
-    init(popoverContent: some View, settings: SettingsStore) {
-        self.settings = settings
+    init(popoverContent: some View, settingsStore: SettingsStore) {
+        self.settingsStore = settingsStore
         super.init()
         popover.behavior = .transient
         let hostingController = NSHostingController(rootView: popoverContent)
@@ -35,7 +34,6 @@ final class StatusItemController: NSObject {
         render()
     }
 
-    /// The badge may now show another window.
     func settingsDidChange() {
         render()
     }
@@ -48,7 +46,7 @@ final class StatusItemController: NSObject {
     /// Text, tint and tooltip all describe the window chosen in settings, so a weekly badge is coloured by the weekly
     /// forecast.
     private func render() {
-        let window = shownState?.snapshot?.window(for: settings.settings.badgeWindowID)
+        let window = shownState?.snapshot?.window(for: settingsStore.settings.badgeWindowID)
         let forecast = window.flatMap { shownState?.forecasts[$0.id] }
         let text = UsageText.badge(primaryWindow: window, hasError: shownState?.lastError != nil)
         let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))

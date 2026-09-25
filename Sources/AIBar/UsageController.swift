@@ -14,16 +14,15 @@ final class UsageController: ObservableObject {
     var onStatesChanged: ([ProviderState]) -> Void = { _ in }
 
     private let providers: [any UsageProvider]
-    /// Source of the poll interval.
-    private let settings: SettingsStore
+    private let settingsStore: SettingsStore
     private let forecaster = WindowForecaster.inApplicationSupport()
     private var pollingTask: Task<Void, Never>?
     /// The interval `pollingTask` sleeps for, to tell a changed interval from any other settings change.
     private var pollingInterval: Duration?
 
-    init(providers: [any UsageProvider], settings: SettingsStore) {
+    init(providers: [any UsageProvider], settingsStore: SettingsStore) {
         self.providers = providers
-        self.settings = settings
+        self.settingsStore = settingsStore
         states = providers.map { ProviderState(id: $0.id, displayName: $0.displayName) }
     }
 
@@ -42,7 +41,8 @@ final class UsageController: ObservableObject {
     /// the reading it last showed may be hours old. Calling it again does nothing.
     func start() {
         guard pollingTask == nil else { return }
-        startPolling(refreshingFirst: true)
+        Task { await refresh() }
+        startPolling()
         // The notification center keeps the observer for the app's lifetime, which is this controller's lifetime.
         _ = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
@@ -54,8 +54,8 @@ final class UsageController: ObservableObject {
     /// A new interval starts counting from now instead of after the old one runs out, so going from 15 minutes to 1
     /// takes effect within a minute.
     func settingsDidChange() {
-        guard pollingTask != nil, settings.settings.refreshInterval != pollingInterval else { return }
-        startPolling(refreshingFirst: false)
+        guard pollingTask != nil, settingsStore.settings.refreshInterval != pollingInterval else { return }
+        startPolling()
     }
 
     /// Fetches every provider concurrently. A provider still busy with an earlier refresh is skipped rather than
@@ -80,19 +80,16 @@ final class UsageController: ObservableObject {
         }
     }
 
-    private func startPolling(refreshingFirst: Bool) {
+    /// Each refresh runs in a task of its own, so replacing the loop cancels only its sleep, never a fetch in flight.
+    private func startPolling() {
         pollingTask?.cancel()
-        let interval = settings.settings.refreshInterval
+        let interval = settingsStore.settings.refreshInterval
         pollingInterval = interval
-        Log.app.notice("refreshing usage every \(interval.components.seconds / 60) min")
+        Log.app.notice("refreshing usage every \(interval.wholeMinutes) min")
         pollingTask = Task { [weak self] in
-            if refreshingFirst {
-                await self?.refresh()
-            }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: interval)
-                guard !Task.isCancelled, let self else { return }
-                await refresh()
+            // Sleep only throws on cancellation, i.e. when a restart has already started this loop's replacement.
+            while (try? await Task.sleep(for: interval)) != nil {
+                Task { await self?.refresh() }
             }
         }
     }

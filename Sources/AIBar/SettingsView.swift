@@ -4,7 +4,7 @@ import SwiftUI
 /// The Settings window's content. Every control writes straight through to `SettingsStore`, so a change applies
 /// the moment it is made, the way macOS settings do; there is no Save button.
 struct SettingsView: View {
-    let settings: SettingsStore
+    let settingsStore: SettingsStore
     /// Only for the titles of the windows the badge can show.
     @ObservedObject var usage: UsageController
 
@@ -45,8 +45,8 @@ struct SettingsView: View {
 
     private var refreshIntervalPicker: some View {
         Picker("Refresh every", selection: Binding(
-            get: { settings.settings.refreshInterval },
-            set: { interval in settings.update { $0.refreshInterval = interval } }
+            get: { settingsStore.settings.refreshInterval },
+            set: { interval in settingsStore.update { $0.refreshInterval = interval } }
         )) {
             ForEach(AppSettings.refreshIntervalChoices, id: \.self) { interval in
                 Text(minutesLabel(interval)).tag(interval)
@@ -58,10 +58,10 @@ struct SettingsView: View {
     /// primary window it falls back to. Before the first snapshot only the default can be named.
     private var badgeWindowPicker: some View {
         let snapshot = usage.states.first?.snapshot
-        let shownWindowID = snapshot?.window(for: settings.settings.badgeWindowID)?.id
+        let shownWindowID = snapshot?.window(for: settingsStore.settings.badgeWindowID)?.id
         return Picker("Show in menu bar", selection: Binding(
             get: { shownWindowID },
-            set: { windowID in settings.update { $0.badgeWindowID = windowID } }
+            set: { windowID in settingsStore.update { $0.badgeWindowID = windowID } }
         )) {
             if shownWindowID == nil {
                 Text("5-hour (default)").tag(String?.none)
@@ -91,6 +91,5 @@ struct SettingsView: View {
 }
 
 private func minutesLabel(_ interval: Duration) -> String {
-    let minutes = interval.components.seconds / 60
-    return minutes == 1 ? "1 minute" : "\(minutes) minutes"
+    interval.wholeMinutes == 1 ? "1 minute" : "\(interval.wholeMinutes) minutes"
 }

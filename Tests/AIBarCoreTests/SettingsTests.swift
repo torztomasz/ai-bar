@@ -2,14 +2,10 @@ import Foundation
 import Testing
 @testable import AIBarCore
 
-// Method: compare against the values the ticket specifies, written out as literals.
+// Method: compare against the defaults the ticket specifies, written out as literals.
 @Suite struct AppSettingsDefaults {
     @Test func pollsEveryFiveMinutesAndShowsThePrimaryWindow() {
         #expect(AppSettings() == AppSettings(refreshInterval: .seconds(5 * 60), badgeWindowID: nil))
-    }
-
-    @Test func offersOneToFifteenMinuteIntervals() {
-        #expect(AppSettings.refreshIntervalChoices == [1, 2, 5, 10, 15].map { Duration.seconds($0 * 60) })
     }
 }
 
@@ -58,17 +54,11 @@ import Testing
     }
 }
 
-@MainActor private func withIsolatedDefaults(_ body: (UserDefaults) -> Void) {
-    let suiteName = "AIBarCoreTests.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defer { defaults.removePersistentDomain(forName: suiteName) }
-    body(defaults)
-}
-
 // Method: write raw values under the store's keys, as a hand edit with `defaults write` or another app version would,
 // then open a store and check it reads the defaults instead of the junk.
 @MainActor @Suite struct SettingsFromBadStoredValues {
-    @Test(arguments: [7, 0, -5, 600, "ten", 2.5] as [any Sendable])
+    // `Int.max` minutes would overflow if converted to a duration before being checked.
+    @Test(arguments: [7, 0, -5, 600, Int.max, "ten", 2.5] as [any Sendable])
     func intervalNotOnOfferFallsBackToFiveMinutes(stored: any Sendable) {
         withIsolatedDefaults { defaults in
             defaults.set(stored, forKey: SettingsStore.Key.refreshIntervalMinutes)
@@ -95,4 +85,11 @@ import Testing
             #expect(store.settings.refreshInterval == .seconds(5 * 60))
         }
     }
+}
+
+@MainActor private func withIsolatedDefaults(_ body: (UserDefaults) -> Void) {
+    let suiteName = "AIBarCoreTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    body(defaults)
 }

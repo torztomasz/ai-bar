@@ -7,9 +7,10 @@ import os
 /// as soon as they are made.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let settings = SettingsStore(defaults: .standard)
-    private lazy var usage = UsageController(providers: [ClaudeUsageProvider()], settings: settings)
-    private lazy var settingsWindow = SettingsWindowController(content: SettingsView(settings: settings, usage: usage))
+    private let settingsStore = SettingsStore(defaults: .standard)
+    private lazy var usage = UsageController(providers: [ClaudeUsageProvider()], settingsStore: settingsStore)
+    private lazy var settingsWindow = SettingsWindowController(
+        content: SettingsView(settingsStore: settingsStore, usage: usage))
     private var statusItemController: StatusItemController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -18,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }, onQuit: {
             NSApplication.shared.terminate(nil)
         })
-        let statusItem = StatusItemController(popoverContent: popover, settings: settings)
+        let statusItem = StatusItemController(popoverContent: popover, settingsStore: settingsStore)
         statusItem.onRefreshRequested = { [weak usage] in
             Task { await usage?.refresh() }
         }
@@ -26,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         usage.onStatesChanged = { [weak statusItem] states in
             statusItem?.show(states.first)
         }
-        settings.onChange = { [weak usage, weak statusItem] _ in
+        settingsStore.onChange = { [weak usage, weak statusItem] _ in
             usage?.settingsDidChange()
             statusItem?.settingsDidChange()
         }

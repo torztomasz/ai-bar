@@ -7,8 +7,8 @@ import Observation
 /// Main-actor bound because its readers (the Settings window, the status item, the poller) all live there.
 @MainActor @Observable
 public final class SettingsStore {
-    /// Always what a fresh store on the same defaults would read, so the app never runs on a value it could not
-    /// restore after a relaunch.
+    /// Always what a fresh store on the same defaults would read, so the app never runs on a value a relaunch would
+    /// discard.
     public private(set) var settings: AppSettings
     /// For AppKit consumers that cannot observe; called after every `update`.
     @ObservationIgnored public var onChange: (AppSettings) -> Void = { _ in }
@@ -29,30 +29,23 @@ public final class SettingsStore {
     public func update(_ mutate: (inout AppSettings) -> Void) {
         var changed = settings
         mutate(&changed)
-        Self.write(changed, to: defaults)
-        settings = Self.read(from: defaults)
+        settings = changed.supported()
+        Self.write(settings, to: defaults)
         onChange(settings)
     }
 
     /// A stored value this version does not offer, e.g. hand-edited or from a future version, reads as the default
-    /// rather than failing.
+    /// rather than failing. Stored minutes are matched against the choices, never converted, so no value can overflow.
     private static func read(from defaults: UserDefaults) -> AppSettings {
         let storedMinutes = defaults.object(forKey: Key.refreshIntervalMinutes) as? Int
-        let storedInterval = storedMinutes.map { Duration.seconds($0 * 60) }
         return AppSettings(
-            refreshInterval: storedInterval.filter(AppSettings.refreshIntervalChoices.contains)
+            refreshInterval: AppSettings.refreshIntervalChoices.first { $0.wholeMinutes == storedMinutes }
                 ?? AppSettings.defaultRefreshInterval,
             badgeWindowID: defaults.object(forKey: Key.badgeWindowID) as? String)
     }
 
     private static func write(_ settings: AppSettings, to defaults: UserDefaults) {
-        defaults.set(Int(settings.refreshInterval.components.seconds / 60), forKey: Key.refreshIntervalMinutes)
+        defaults.set(settings.refreshInterval.wholeMinutes, forKey: Key.refreshIntervalMinutes)
         defaults.set(settings.badgeWindowID, forKey: Key.badgeWindowID)
-    }
-}
-
-extension Optional {
-    fileprivate func filter(_ isIncluded: (Wrapped) -> Bool) -> Wrapped? {
-        flatMap { isIncluded($0) ? $0 : nil }
     }
 }
