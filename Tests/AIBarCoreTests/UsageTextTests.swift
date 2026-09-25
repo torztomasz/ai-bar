@@ -53,51 +53,49 @@ import Testing
     }
 }
 
-// `now` is Friday 15 January 2027, 08:00 UTC; drain times are formatted in UTC with a 24-hour British locale so the
-// expected wording is fixed.
-@Suite struct ForecastLineText {
-    @Test func windowThatWillLastSaysSo() {
-        #expect(line(.willLast, for: .fiveHour) == "On pace to last")
+@Suite struct LockoutLineText {
+    // Draining in 1h with the reset at 2h20m leaves 1h20m without the provider.
+    @Test func drainBeforeResetSaysHowLongTheLockoutLasts() {
+        let forecast = DrainForecast.verdict(.willDrain(at: after(hours: 1)))
+
+        #expect(UsageText.lockout(forecast, resetsAt: after(hours: 2, minutes: 20)) == "Locked out for ~1h 20m")
     }
 
-    // A 5-hour window drains within hours, so the clock time alone is unambiguous.
-    @Test func fiveHourWindowThatWillDrainShowsTheClockTime() {
-        #expect(line(.willDrain(at: after(hours: 6, minutes: 35)), for: .fiveHour) == "Drains at 14:35")
+    // A window at its limit drains even when the provider gives no reset time; nothing says how long it lasts.
+    @Test func drainWithoutAResetTimeIsALockoutOfUnknownLength() {
+        #expect(UsageText.lockout(.verdict(.willDrain(at: now)), resetsAt: nil) == "Locked out")
     }
 
-    // A weekly window can drain days from now, when the clock time alone would suggest today.
-    @Test func weeklyWindowThatWillDrainShowsTheDayToo() {
-        let drainsAt = after(hours: 2 * 24 + 6)
-
-        #expect(line(.willDrain(at: drainsAt), for: .weekly) == "Drains at 14:00 on Sun 17 Jan")
-        #expect(line(.willDrain(at: drainsAt), for: .weeklyModel(name: "Fable")) == "Drains at 14:00 on Sun 17 Jan")
+    @Test func windowThatLastsSaysSo() {
+        #expect(UsageText.lockout(.verdict(.willLast), resetsAt: after(hours: 2)) == "Lasts to reset")
     }
 
-    // Formatted whole, a date and time takes the locale's joining word ("Di., 29. Sept., 05:46" in German). Only
-    // the clock and day parts may vary by locale; the sentence around them stays the same.
-    @Test func weeklyWordingDoesNotDependOnTheLocale() {
-        let text = UsageText.forecast(.verdict(.willDrain(at: after(hours: 2 * 24 + 6))), for: .weekly,
-                                      locale: Locale(identifier: "de_DE"), timeZone: .gmt)
-
-        #expect(text.hasPrefix("Drains at 14:00 on "))
+    @Test func unknownOrMissingForecastHasNoEstimateYet() {
+        #expect(UsageText.lockout(.verdict(.unknown), resetsAt: after(hours: 2)) == "No estimate yet")
+        #expect(UsageText.lockout(nil, resetsAt: after(hours: 2)) == "No estimate yet")
     }
 
-    @Test func unknownOrMissingForecastAsksForPatience() {
-        #expect(line(.unknown, for: .fiveHour) == "Not enough data")
-        #expect(UsageText.forecast(nil, for: .weekly) == "Not enough data")
-    }
-
-    private func line(_ outlook: DrainOutlook, for kind: UsageWindow.Kind) -> String {
-        UsageText.forecast(.verdict(outlook), for: kind, locale: Locale(identifier: "en_GB"), timeZone: .gmt)
-    }
 }
 
 @Suite struct StatusItemTooltip {
-    @Test func spellsOutPercentResetAndProjection() {
+    // Draining 53 minutes from now with the reset at 2h13m leaves 1h20m locked out.
+    @Test func spellsOutPercentResetAndLockout() {
         let window = UsageWindow.fiveHour(percent: 42, resetsAt: after(hours: 2, minutes: 13))
-        let forecast = DrainForecast(outlook: .willLast, projectedPercentAtReset: 71.2, ratePercentPerHour: 12)
 
-        #expect(tooltip(window, forecast) == "Claude 5-hour: 42% · resets in 2h 13m · projected 71% at reset")
+        #expect(tooltip(window, .verdict(.willDrain(at: after(minutes: 53))))
+            == "Claude 5-hour: 42% · resets in 2h 13m · locked out for ~1h 20m")
+    }
+
+    // Lasting to the reset is the normal case; the tooltip only grows when there is something to warn about.
+    @Test func windowThatLastsAddsNothing() {
+        let window = UsageWindow.fiveHour(percent: 42, resetsAt: after(hours: 2, minutes: 13))
+
+        #expect(tooltip(window, .verdict(.willLast)) == "Claude 5-hour: 42% · resets in 2h 13m")
+    }
+
+    // At the limit with no reset time the badge is red, so the tooltip still says why, without a length.
+    @Test func drainWithoutAResetTimeSaysLockedOut() {
+        #expect(tooltip(.fiveHour(percent: 100), .verdict(.willDrain(at: now))) == "Claude 5-hour: 100% · locked out")
     }
 
     // Parts the data cannot back are left out instead of shown as placeholders.
@@ -114,10 +112,11 @@ import Testing
 
     // The badge keeps the last reading after a failed refresh, so the tooltip is where the user learns it is stale.
     @Test func flagsAFailedRefreshAfterTheLastReading() {
-        let text = UsageText.tooltip(providerName: "Claude", primaryWindow: .fiveHour(percent: 42), forecast: nil,
-                                     errorDescription: "Can't reach Claude.", now: now)
+        let text = UsageText.tooltip(providerName: "Claude", primaryWindow: .fiveHour(percent: 100),
+                                     forecast: .verdict(.willDrain(at: now)), errorDescription: "Can't reach Claude.",
+                                     now: now)
 
-        #expect(text == "Claude 5-hour: 42% · last refresh failed: Can't reach Claude.")
+        #expect(text == "Claude 5-hour: 100% · locked out · last refresh failed: Can't reach Claude.")
     }
 
     @Test func saysWhenThereIsNoDataYet() {

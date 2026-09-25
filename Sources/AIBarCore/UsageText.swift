@@ -9,9 +9,9 @@ public enum UsageText {
         return percent(primaryWindow.percentUsed)
     }
 
-    /// E.g. "Claude 5-hour: 42% · resets in 2h 13m · projected 71% at reset"; parts without data are left out.
-    /// A failed refresh is appended because the badge keeps showing the last reading, which would otherwise look
-    /// current.
+    /// E.g. "Claude 5-hour: 42% · resets in 2h 13m · locked out for ~1h 20m"; parts without data are left out. A window
+    /// that lasts is the normal case, so only a lockout is worth the extra words. A failed refresh is appended because
+    /// the badge keeps showing the last reading, which would otherwise look current.
     public static func tooltip(providerName: String, primaryWindow: UsageWindow?, forecast: DrainForecast?,
                                errorDescription: String?, now: Date) -> String {
         guard let primaryWindow else {
@@ -21,8 +21,8 @@ public enum UsageText {
         if let resetsAt = primaryWindow.resetsAt {
             parts.append(resetsIn(resetsAt, now: now))
         }
-        if let projected = forecast?.projectedPercentAtReset {
-            parts.append("projected \(percent(projected)) at reset")
+        if case .willDrain = forecast?.outlook {
+            parts.append(lockout(forecast, resetsAt: primaryWindow.resetsAt).lowercased())
         }
         if let errorDescription {
             parts.append("last refresh failed: \(errorDescription)")
@@ -48,23 +48,17 @@ public enum UsageText {
         }
     }
 
-    /// The drain time is a clock reading in the user's locale and time zone; tests pin both. A window longer than a
-    /// day can drain days from now, so its drain time names the day as well. Clock and day are formatted apart and
-    /// joined here, so the sentence reads the same in every locale rather than taking each locale's own joining word.
-    public static func forecast(_ forecast: DrainForecast?, for kind: UsageWindow.Kind, locale: Locale = .current,
-                                timeZone: TimeZone = .current) -> String {
+    /// Answers "for how long will I be without this provider?" rather than when it drains, which would leave the
+    /// reader to do the date arithmetic. Approximate because the drain time is a projection.
+    public static func lockout(_ forecast: DrainForecast?, resetsAt: Date?) -> String {
         switch forecast?.outlook {
+        case .willDrain:
+            guard let lockout = forecast?.lockout(resetsAt: resetsAt) else { return "Locked out" }
+            return "Locked out for ~\(duration(lockout))"
         case .willLast:
-            return "On pace to last"
-        case .willDrain(let at):
-            let clock = at.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale,
-                                                      timeZone: timeZone))
-            guard kind.spansDays else { return "Drains at \(clock)" }
-            let day = at.formatted(Date.FormatStyle(locale: locale, timeZone: timeZone)
-                .weekday(.abbreviated).day().month(.abbreviated))
-            return "Drains at \(clock) on \(day)"
+            return "Lasts to reset"
         case .unknown, nil:
-            return "Not enough data"
+            return "No estimate yet"
         }
     }
 
@@ -83,8 +77,4 @@ public enum UsageText {
         if hours > 0 { return "\(hours)h \(minutes)m" }
         return "\(minutes)m"
     }
-}
-
-private extension UsageWindow.Kind {
-    var spansDays: Bool { (length ?? 0) > RollingWindow.day }
 }

@@ -67,7 +67,7 @@ public enum DrainOutlook: Equatable, Sendable {
     case unknown
 }
 
-/// The outlook plus the numbers behind it, so the UI can explain a verdict ("projected 71% at reset").
+/// The outlook plus the numbers behind it, so the UI can explain a verdict (the bar's projected segment, the lockout).
 public struct DrainForecast: Equatable, Sendable {
     public let outlook: DrainOutlook
     /// `nil` when there is no rate to project with (see `ratePercentPerHour`).

@@ -79,17 +79,17 @@ private struct WindowRow: View {
             }
             UsageBarView(bar: UsageBar(percentUsed: window.percentUsed,
                                        projectedPercentAtReset: forecast?.projectedPercentAtReset))
-            // A weekly drain line names the day and can be too long to share the row; it then goes on its own
-            // line instead of wrapping mid-date.
+            // A long reset countdown next to a lockout may not fit on one row; the lockout then goes on its own line
+            // instead of wrapping mid-duration.
             ViewThatFits(in: .horizontal) {
                 HStack {
                     resetsLine
                     Spacer()
-                    forecastLine
+                    lockoutLine
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     resetsLine
-                    forecastLine
+                    lockoutLine
                 }
             }
             .font(.caption)
@@ -101,9 +101,14 @@ private struct WindowRow: View {
         Text(UsageText.resetsIn(window.resetsAt, now: now)).fixedSize()
     }
 
-    @ViewBuilder private var forecastLine: some View {
+    /// Being locked out is the one thing the row must not let the user miss, so it takes the bar's critical colour.
+    @ViewBuilder private var lockoutLine: some View {
         if let forecast {
-            Text(UsageText.forecast(forecast, for: window.kind)).fixedSize()
+            let isLockedOut = forecast.lockout(resetsAt: window.resetsAt) != nil
+            Text(UsageText.lockout(forecast, resetsAt: window.resetsAt))
+                .fontWeight(isLockedOut ? .semibold : nil)
+                .foregroundStyle(isLockedOut ? AnyShapeStyle(UsageLevel.critical.color) : AnyShapeStyle(.secondary))
+                .fixedSize()
         }
     }
 }
