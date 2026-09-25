@@ -59,3 +59,48 @@ import Testing
         #expect(bar.estimate == nil)
     }
 }
+
+// Method: lay a 5-hour window out on `FixtureWindow` and build its bar at chosen moments, so the expected fraction is
+// the hour offset divided by five.
+@Suite struct UsageBarTimeCursor {
+    @Test func atTheWindowsOpeningNoTimeHasElapsed() {
+        #expect(bar(at: FixtureWindow.time(hours: 0)).elapsedFraction == 0)
+    }
+
+    @Test func halfwayThroughTheWindowIsHalfElapsed() {
+        #expect(bar(at: FixtureWindow.time(hours: 2.5)).elapsedFraction == 0.5)
+    }
+
+    // The provider may not have caught up with the reset yet; the cursor waits at the end instead of leaving the bar.
+    @Test func pastTheResetStaysAtTheEnd() {
+        #expect(bar(at: FixtureWindow.time(hours: 6)).elapsedFraction == 1)
+    }
+
+    @Test func withoutAResetTimeThereIsNoCursor() {
+        let window = UsageWindow.fiveHour(percent: 40, resetsAt: nil)
+
+        #expect(UsageBar(window: window, forecast: nil, now: FixtureWindow.time(hours: 1)).elapsedFraction == nil)
+    }
+
+    // A window the app does not understand has no known length, so no known start.
+    @Test func windowOfUnknownLengthHasNoCursor() {
+        let window = UsageWindow(id: "new", kind: .other, title: "New", percentUsed: 40,
+                                 resetsAt: FixtureWindow.resetsAt)
+
+        #expect(UsageBar(window: window, forecast: nil, now: FixtureWindow.time(hours: 1)).elapsedFraction == nil)
+    }
+
+    // Built from a window and its forecast, the bar still reads fill and estimate the way it always did.
+    @Test func fillAndEstimateComeFromTheReadingAndTheForecast() {
+        let forecast = DrainForecast(outlook: .willLast, projectedPercentAtReset: 95, ratePercentPerHour: 10)
+        let bar = UsageBar(window: .fiveHour(percent: 60, resetsAt: FixtureWindow.resetsAt), forecast: forecast,
+                           now: FixtureWindow.time(hours: 1))
+
+        #expect(bar.fill == UsageBar.Segment(fraction: 0.6, level: .ok))
+        #expect(bar.estimate == UsageBar.Segment(fraction: 0.95, level: .critical))
+    }
+
+    private func bar(at now: Date) -> UsageBar {
+        UsageBar(window: .fiveHour(percent: 40, resetsAt: FixtureWindow.resetsAt), forecast: nil, now: now)
+    }
+}

@@ -85,8 +85,7 @@ private struct WindowRow: View {
                 Spacer()
                 Text(UsageText.percent(window.percentUsed)).monospacedDigit()
             }
-            UsageBarView(bar: UsageBar(percentUsed: window.percentUsed,
-                                       projectedPercentAtReset: forecast?.projectedPercentAtReset))
+            UsageBarView(bar: UsageBar(window: window, forecast: forecast, now: now))
             // A long reset countdown next to a lockout may not fit on one row; the lockout then goes on its own line
             // instead of wrapping mid-duration.
             ViewThatFits(in: .horizontal) {
