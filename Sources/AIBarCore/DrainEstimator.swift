@@ -10,10 +10,10 @@ import Foundation
 /// The forecast extends that pace from the latest sample to the reset. Samples outside the window (before its
 /// start, after the reset, or after `now`) are ignored because they describe another window or a clock glitch.
 /// A reading already at 100% is a drained window whatever the pace or reset time.
-public struct DrainEstimator {
+public struct DrainEstimator: Sendable {
     public let windowLength: TimeInterval
 
-    public init(windowLength: TimeInterval = RollingWindow.fiveHours) {
+    public init(windowLength: TimeInterval) {
         self.windowLength = windowLength
     }
 

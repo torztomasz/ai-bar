@@ -67,7 +67,6 @@ private struct ProviderSection: View {
 
 private struct WindowRow: View {
     let window: UsageWindow
-    /// `nil` for a window that cannot be forecast, which then shows no forecast line.
     let forecast: DrainForecast?
     let now: Date
 
@@ -80,15 +79,31 @@ private struct WindowRow: View {
             }
             UsageBarView(bar: UsageBar(percentUsed: window.percentUsed,
                                        projectedPercentAtReset: forecast?.projectedPercentAtReset))
-            HStack {
-                Text(UsageText.resetsIn(window.resetsAt, now: now))
-                Spacer()
-                if let forecast {
-                    Text(UsageText.forecast(forecast, for: window.kind))
+            // A weekly drain line names the day and can be too long to share the row; it then goes on its own
+            // line instead of wrapping mid-date.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    resetsLine
+                    Spacer()
+                    forecastLine
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    resetsLine
+                    forecastLine
                 }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+        }
+    }
+
+    private var resetsLine: some View {
+        Text(UsageText.resetsIn(window.resetsAt, now: now)).fixedSize()
+    }
+
+    @ViewBuilder private var forecastLine: some View {
+        if let forecast {
+            Text(UsageText.forecast(forecast, for: window.kind)).fixedSize()
         }
     }
 }

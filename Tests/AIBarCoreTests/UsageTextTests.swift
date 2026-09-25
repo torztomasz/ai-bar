@@ -69,8 +69,17 @@ import Testing
     @Test func weeklyWindowThatWillDrainShowsTheDayToo() {
         let drainsAt = after(hours: 2 * 24 + 6)
 
-        #expect(line(.willDrain(at: drainsAt), for: .weekly) == "Drains Sun 17 Jan at 14:00")
-        #expect(line(.willDrain(at: drainsAt), for: .weeklyModel(name: "Fable")) == "Drains Sun 17 Jan at 14:00")
+        #expect(line(.willDrain(at: drainsAt), for: .weekly) == "Drains at 14:00 on Sun 17 Jan")
+        #expect(line(.willDrain(at: drainsAt), for: .weeklyModel(name: "Fable")) == "Drains at 14:00 on Sun 17 Jan")
+    }
+
+    // Formatted whole, a date and time takes the locale's joining word ("Di., 29. Sept., 05:46" in German). Only
+    // the clock and day parts may vary by locale; the sentence around them stays the same.
+    @Test func weeklyWordingDoesNotDependOnTheLocale() {
+        let text = UsageText.forecast(.verdict(.willDrain(at: after(hours: 2 * 24 + 6))), for: .weekly,
+                                      locale: Locale(identifier: "de_DE"), timeZone: .gmt)
+
+        #expect(text.hasPrefix("Drains at 14:00 on "))
     }
 
     @Test func unknownOrMissingForecastAsksForPatience() {

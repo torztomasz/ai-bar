@@ -6,9 +6,10 @@ public enum RollingWindow {
     /// Claude's session limit resets 5 hours after the request that opened the window.
     public static let fiveHours: TimeInterval = 5 * secondsPerHour
     /// Claude's weekly limits, overall and per model, reset 7 days after the window opened.
-    public static let week: TimeInterval = 7 * 24 * secondsPerHour
+    public static let week: TimeInterval = 7 * day
 
     static let secondsPerHour: TimeInterval = 3600
+    static let day: TimeInterval = 24 * secondsPerHour
 
     static func start(resetsAt: Date, length: TimeInterval) -> Date {
         resetsAt.addingTimeInterval(-length)

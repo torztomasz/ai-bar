@@ -16,30 +16,30 @@ import Testing
     @Test func samplesSurviveReopeningTheStore() {
         let first = UsageSample(at: start.addingTimeInterval(600), percentUsed: 10)
         let second = UsageSample(at: start.addingTimeInterval(1200), percentUsed: 12.5)
-        let store = SampleStore(fileURL: fileURL)
+        let store = SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length)
 
         store.append(first, resetsAt: resetsAt)
         store.append(second, resetsAt: resetsAt)
 
-        #expect(SampleStore(fileURL: fileURL).samples() == [first, second])
+        #expect(SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length).samples() == [first, second])
     }
 
     // Ten minutes before the window opened belongs to the previous window, so it is dropped from disk too.
     @Test func appendingDropsSamplesFromBeforeTheCurrentWindow() {
         let previousWindow = UsageSample(at: start.addingTimeInterval(-600), percentUsed: 80)
         let current = UsageSample(at: start.addingTimeInterval(600), percentUsed: 5)
-        let store = SampleStore(fileURL: fileURL)
+        let store = SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length)
 
         store.append(previousWindow, resetsAt: start)
         store.append(current, resetsAt: resetsAt)
 
         #expect(store.samples() == [current])
-        #expect(SampleStore(fileURL: fileURL).samples() == [current])
+        #expect(SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length).samples() == [current])
     }
 
     // Appended late, e.g. a poll result that sat in a queue across the reset: it is already outside the window.
     @Test func appendingASampleFromBeforeTheCurrentWindowDoesNotKeepIt() {
-        let store = SampleStore(fileURL: fileURL)
+        let store = SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length)
 
         store.append(UsageSample(at: start.addingTimeInterval(-600), percentUsed: 80), resetsAt: resetsAt)
 
@@ -52,7 +52,7 @@ import Testing
         let newest = UsageSample(at: resetsAt, percentUsed: 0)
         let tooOld = UsageSample(at: resetsAt.addingTimeInterval(-5 * 3600 - 600), percentUsed: 40)
         let recent = UsageSample(at: resetsAt.addingTimeInterval(-4 * 3600), percentUsed: 50)
-        let store = SampleStore(fileURL: fileURL)
+        let store = SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length)
 
         store.append(tooOld, resetsAt: nil)
         store.append(recent, resetsAt: nil)
@@ -62,7 +62,7 @@ import Testing
     }
 
     @Test func recordingAWindowStoresItsReadingAtTheGivenTime() {
-        let store = SampleStore(fileURL: fileURL)
+        let store = SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length)
 
         store.record(.fiveHour(percent: 30, resetsAt: resetsAt), at: start.addingTimeInterval(600))
 
@@ -72,7 +72,7 @@ import Testing
     // Ten minutes past the reported reset the provider has not caught up: the 90% describes a window that is over,
     // and if kept it could land inside the next window and inflate its pace.
     @Test func recordingAWindowPastItsResetKeepsNothing() {
-        let store = SampleStore(fileURL: fileURL)
+        let store = SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length)
 
         store.record(.fiveHour(percent: 90, resetsAt: resetsAt), at: resetsAt.addingTimeInterval(600))
 
@@ -80,27 +80,27 @@ import Testing
     }
 
     @Test func clearForgetsSamplesAcrossReopening() {
-        let store = SampleStore(fileURL: fileURL)
+        let store = SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length)
         store.append(UsageSample(at: start.addingTimeInterval(600), percentUsed: 10), resetsAt: resetsAt)
 
         store.clear()
 
         #expect(store.samples().isEmpty)
-        #expect(SampleStore(fileURL: fileURL).samples().isEmpty)
+        #expect(SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length).samples().isEmpty)
     }
 
     @Test func unreadableFileStartsEmpty() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try Data("not json".utf8).write(to: fileURL)
 
-        #expect(SampleStore(fileURL: fileURL).samples().isEmpty)
+        #expect(SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length).samples().isEmpty)
     }
 
     // The store's directory is a regular file, so saving must fail; the sample is still kept for this session.
     @Test func failingToSaveKeepsSamplesInMemory() throws {
         try Data().write(to: directory)
         let sample = UsageSample(at: start.addingTimeInterval(600), percentUsed: 10)
-        let store = SampleStore(fileURL: fileURL)
+        let store = SampleStore(fileURL: fileURL, windowLength: FixtureWindow.length)
 
         store.append(sample, resetsAt: resetsAt)
 

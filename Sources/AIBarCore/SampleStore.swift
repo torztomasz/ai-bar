@@ -10,7 +10,7 @@ public final class SampleStore: Sendable {
     public let windowLength: TimeInterval
     private let lockedSamples: OSAllocatedUnfairLock<[UsageSample]>
 
-    public init(fileURL: URL, windowLength: TimeInterval = RollingWindow.fiveHours) {
+    public init(fileURL: URL, windowLength: TimeInterval) {
         self.fileURL = fileURL
         self.windowLength = windowLength
         lockedSamples = OSAllocatedUnfairLock(initialState: Self.load(from: fileURL))

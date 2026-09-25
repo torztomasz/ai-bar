@@ -6,7 +6,7 @@ import Testing
 // the fixed 5-hour `FixtureWindow`, the way the app does after each poll. A restart is simulated by opening a second
 // forecaster on the same directory. Expected rates are worked out by hand from the anchor rule (0% when the window
 // opened) and restated in each test.
-@Suite final class WindowForecasterBehavior {
+@MainActor @Suite final class WindowForecasterBehavior {
     let directory = FileManager.default.temporaryDirectory
         .appending(path: UUID().uuidString, directoryHint: .isDirectory)
 
@@ -19,7 +19,7 @@ import Testing
     // 5 hours long, the reading would fall before its window opened and there would be no forecast at all.
     @Test func forecastsEveryWindowOverItsOwnLength() throws {
         let now = FixtureWindow.time(hours: 2.5)
-        let weekly = weeklyWindow(percent: 35, resetsAt: now.addingTimeInterval(3.5 * 86_400))
+        let weekly = weeklyWindow(percent: 35, resetsAt: now.addingTimeInterval(3.5 * RollingWindow.day))
 
         let forecasts = WindowForecaster(directory: directory)
             .forecasts(for: snapshot(at: now, [.fiveHour(percent: 30, resetsAt: FixtureWindow.resetsAt), weekly]))
@@ -46,7 +46,7 @@ import Testing
     // DrainEstimatorTests). A weekly window sitting at 90% in both polls shares the snapshots; had its samples landed
     // in the 5-hour history, the fit would be pulled far off 21%/h.
     @Test func eachWindowKeepsItsOwnHistoryAcrossRestarts() throws {
-        let weekly = weeklyWindow(percent: 90, resetsAt: FixtureWindow.resetsAt.addingTimeInterval(86_400))
+        let weekly = weeklyWindow(percent: 90, resetsAt: FixtureWindow.resetsAt.addingTimeInterval(RollingWindow.day))
         _ = WindowForecaster(directory: directory).forecasts(for: snapshot(
             at: FixtureWindow.time(hours: 1), [.fiveHour(percent: 1, resetsAt: FixtureWindow.resetsAt), weekly]))
 
@@ -61,7 +61,7 @@ import Testing
     // still count after the upgrade, giving the same 21%/h as above rather than the 19.67%/h of the 59% alone.
     @Test func adoptsTheFiveHourHistoryFromBeforePerWindowFiles() throws {
         let legacyFile = directory.appending(path: "samples-claude.json", directoryHint: .notDirectory)
-        SampleStore(fileURL: legacyFile)
+        SampleStore(fileURL: legacyFile, windowLength: FixtureWindow.length)
             .append(UsageSample(at: FixtureWindow.time(hours: 1), percentUsed: 1), resetsAt: FixtureWindow.resetsAt)
 
         let forecasts = WindowForecaster(directory: directory).forecasts(for: snapshot(

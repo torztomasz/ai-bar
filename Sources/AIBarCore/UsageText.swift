@@ -49,20 +49,20 @@ public enum UsageText {
     }
 
     /// The drain time is a clock reading in the user's locale and time zone; tests pin both. A window longer than a
-    /// day can drain days from now, so its drain time carries the day as well.
+    /// day can drain days from now, so its drain time names the day as well. Clock and day are formatted apart and
+    /// joined here, so the sentence reads the same in every locale rather than taking each locale's own joining word.
     public static func forecast(_ forecast: DrainForecast?, for kind: UsageWindow.Kind, locale: Locale = .current,
                                 timeZone: TimeZone = .current) -> String {
         switch forecast?.outlook {
         case .willLast:
             return "On pace to last"
-        case .willDrain(let at) where kind.spansDays:
-            var style = Date.FormatStyle(locale: locale).weekday(.abbreviated).day().month(.abbreviated).hour().minute()
-            style.timeZone = timeZone
-            return "Drains \(at.formatted(style))"
         case .willDrain(let at):
-            var style = Date.FormatStyle(date: .omitted, time: .shortened, locale: locale)
-            style.timeZone = timeZone
-            return "Drains at \(at.formatted(style))"
+            let clock = at.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale,
+                                                      timeZone: timeZone))
+            guard kind.spansDays else { return "Drains at \(clock)" }
+            let day = at.formatted(Date.FormatStyle(locale: locale, timeZone: timeZone)
+                .weekday(.abbreviated).day().month(.abbreviated))
+            return "Drains at \(clock) on \(day)"
         case .unknown, nil:
             return "Not enough data"
         }
@@ -86,5 +86,5 @@ public enum UsageText {
 }
 
 private extension UsageWindow.Kind {
-    var spansDays: Bool { (length ?? 0) > 24 * RollingWindow.secondsPerHour }
+    var spansDays: Bool { (length ?? 0) > RollingWindow.day }
 }

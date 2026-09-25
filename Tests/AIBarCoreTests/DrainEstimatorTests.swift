@@ -110,7 +110,7 @@ import Testing
     /// Forecast `hours` into the fixture window, against its reset time unless one is given.
     private func forecast(_ samples: [UsageSample], atHour hours: Double,
                           resetsAt: Date? = FixtureWindow.resetsAt) -> DrainForecast {
-        DrainEstimator().forecast(samples: samples, resetsAt: resetsAt, now: time(hours: hours))
+        estimator.forecast(samples: samples, resetsAt: resetsAt, now: time(hours: hours))
     }
 }
 
@@ -122,7 +122,7 @@ import Testing
         let window = UsageWindow.fiveHour(percent: 100, resetsAt: FixtureWindow.resetsAt)
         let polledAt = time(hours: 5 + 1.0 / 6)
 
-        let forecast = DrainEstimator().forecast(for: window, samples: [sample(hours: 4, 100)], now: polledAt)
+        let forecast = estimator.forecast(for: window, samples: [sample(hours: 4, 100)], now: polledAt)
 
         #expect(window.isPastReset(now: polledAt))
         #expect(forecast.outlook == .unknown)
@@ -132,13 +132,15 @@ import Testing
     @Test func windowBeforeItsResetTimeIsForecastNormally() {
         let window = UsageWindow.fiveHour(percent: 30, resetsAt: FixtureWindow.resetsAt)
 
-        let forecast = DrainEstimator().forecast(for: window, samples: [sample(hours: 2.5, 30)], now: time(hours: 2.5))
+        let forecast = estimator.forecast(for: window, samples: [sample(hours: 2.5, 30)], now: time(hours: 2.5))
 
         #expect(!window.isPastReset(now: time(hours: 2.5)))
         #expect(forecast.outlook == .willLast)
         #expect(forecast.projectedPercentAtReset == 60)
     }
 }
+
+private let estimator = DrainEstimator(windowLength: FixtureWindow.length)
 
 private func time(hours: Double) -> Date {
     FixtureWindow.time(hours: hours)

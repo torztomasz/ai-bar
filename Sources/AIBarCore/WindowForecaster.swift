@@ -5,7 +5,9 @@ import os
 /// get a pace of their own. Histories live one file per (provider, window) under `directory`, so a restart resumes
 /// every forecast where it left off.
 ///
-/// Not thread-safe: the app calls it from the main actor after each poll.
+/// Main-actor bound because it caches stores in a plain dictionary; the app forecasts after each poll on the main
+/// actor anyway.
+@MainActor
 public final class WindowForecaster {
     public let directory: URL
     /// Opened on first use, keyed by file so a window keeps one store for the app's lifetime.
@@ -35,7 +37,8 @@ public final class WindowForecaster {
         return forecasts
     }
 
-    /// `samples-<provider>-<window>.json`, both ids made file-safe.
+    /// `samples-<provider>-<window>.json`, both ids made file-safe. `length` is the window kind's, already known
+    /// to exist, passed in so it is not unwrapped a second time.
     private func store(for window: UsageWindow, of provider: ProviderID, length: TimeInterval) -> SampleStore {
         let fileURL = file(named: "samples-\(fileSafe(provider.rawValue))-\(fileSafe(window.id)).json")
         if let store = stores[fileURL] { return store }
@@ -66,8 +69,8 @@ public final class WindowForecaster {
     }
 }
 
-/// Percent-encodes everything but ASCII letters, digits and `_`. Window ids contain `:` and `·`; encoding rather
-/// than replacing them keeps distinct ids in distinct files, and encoding `-` keeps the separator unambiguous.
+/// Window ids contain `:` and `·`. Encoding rather than replacing them keeps distinct ids in distinct files, and
+/// encoding `-` keeps the separator between provider and window unambiguous.
 private func fileSafe(_ id: String) -> String {
     id.utf8.map { byte in
         isFileSafe(byte) ? String(UnicodeScalar(byte)) : String(format: "%%%02X", byte)
