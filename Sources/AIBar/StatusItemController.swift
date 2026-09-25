@@ -48,11 +48,11 @@ final class StatusItemController: NSObject {
     private func render() {
         let window = shownState?.snapshot?.window(for: settingsStore.settings.badgeWindowID)
         let forecast = window.flatMap { shownState?.forecasts[$0.id] }
-        let text = UsageText.badge(primaryWindow: window, hasError: shownState?.lastError != nil)
+        let text = UsageText.badge(window: window, hasError: shownState?.lastError != nil)
         let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))
         statusItem.button?.image = BadgeRenderer.image(text: text, tint: BadgeTint(forecast: forecast), height: height)
         statusItem.button?.toolTip = shownState.map { state in
-            UsageText.tooltip(providerName: state.displayName, primaryWindow: window, forecast: forecast,
+            UsageText.tooltip(providerName: state.displayName, window: window, forecast: forecast,
                               errorDescription: state.lastError?.localizedDescription, now: Date())
         }
     }

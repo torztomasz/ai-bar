@@ -3,26 +3,27 @@ import Foundation
 /// Every string the menu bar item and popover show, as pure functions of the data, so wording and rounding are
 /// unit-tested without AppKit and the views only lay text out.
 public enum UsageText {
-    /// A failed fetch with nothing to fall back on gets a `!` so it is not mistaken for "still loading".
-    public static func badge(primaryWindow: UsageWindow?, hasError: Bool) -> String {
-        guard let primaryWindow else { return hasError ? "--%!" : "--%" }
-        return percent(primaryWindow.percentUsed)
+    /// `window` is the one chosen for the badge (see `UsageSnapshot.window(for:)`). A failed fetch with nothing to fall
+    /// back on gets a `!` so it is not mistaken for "still loading".
+    public static func badge(window: UsageWindow?, hasError: Bool) -> String {
+        guard let window else { return hasError ? "--%!" : "--%" }
+        return percent(window.percentUsed)
     }
 
     /// E.g. "Claude 5-hour: 42% · resets in 2h 13m · locked out for ~1h 20m"; parts without data are left out. A window
     /// that lasts is the normal case, so only a lockout is worth the extra words. A failed refresh is appended because
     /// the badge keeps showing the last reading, which would otherwise look current.
-    public static func tooltip(providerName: String, primaryWindow: UsageWindow?, forecast: DrainForecast?,
+    public static func tooltip(providerName: String, window: UsageWindow?, forecast: DrainForecast?,
                                errorDescription: String?, now: Date) -> String {
-        guard let primaryWindow else {
+        guard let window else {
             return "\(providerName): \(errorDescription ?? "no usage data yet")"
         }
-        var parts = ["\(providerName) \(primaryWindow.title): \(percent(primaryWindow.percentUsed))"]
-        if let resetsAt = primaryWindow.resetsAt {
+        var parts = ["\(providerName) \(window.title): \(percent(window.percentUsed))"]
+        if let resetsAt = window.resetsAt {
             parts.append(resetsIn(resetsAt, now: now))
         }
         if case .willDrain = forecast?.outlook {
-            parts.append("locked out\(lockoutLength(forecast, resetsAt: primaryWindow.resetsAt))")
+            parts.append("locked out\(lockoutLength(forecast, resetsAt: window.resetsAt))")
         }
         if let errorDescription {
             parts.append("last refresh failed: \(errorDescription)")

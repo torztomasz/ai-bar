@@ -21,23 +21,23 @@ import Testing
 }
 
 @Suite struct BadgeText {
-    @Test func showsThePrimaryWindowPercentRoundedToAWholeNumber() {
-        #expect(UsageText.badge(primaryWindow: .fiveHour(percent: 42.4), hasError: false) == "42%")
-        #expect(UsageText.badge(primaryWindow: .fiveHour(percent: 41.6), hasError: false) == "42%")
+    @Test func showsTheWindowPercentRoundedToAWholeNumber() {
+        #expect(UsageText.badge(window: .fiveHour(percent: 42.4), hasError: false) == "42%")
+        #expect(UsageText.badge(window: .fiveHour(percent: 41.6), hasError: false) == "42%")
     }
 
     // Before the first successful fetch there is nothing to show, but the item must keep its place in the menu bar.
     @Test func showsPlaceholderBeforeAnyData() {
-        #expect(UsageText.badge(primaryWindow: nil, hasError: false) == "--%")
+        #expect(UsageText.badge(window: nil, hasError: false) == "--%")
     }
 
     @Test func marksThePlaceholderWhenFetchingFailed() {
-        #expect(UsageText.badge(primaryWindow: nil, hasError: true) == "--%!")
+        #expect(UsageText.badge(window: nil, hasError: true) == "--%!")
     }
 
     // A failed refresh keeps the last snapshot; its percent is still the best number available.
     @Test func keepsShowingTheLastPercentWhenARefreshFailed() {
-        #expect(UsageText.badge(primaryWindow: .fiveHour(percent: 42), hasError: true) == "42%")
+        #expect(UsageText.badge(window: .fiveHour(percent: 42), hasError: true) == "42%")
     }
 }
 

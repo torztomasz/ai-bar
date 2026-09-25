@@ -103,7 +103,7 @@ import Testing
     }
 
     @Test func explainsAFailureWhenThereIsNoData() {
-        let text = UsageText.tooltip(providerName: "Claude", primaryWindow: nil, forecast: nil,
+        let text = UsageText.tooltip(providerName: "Claude", window: nil, forecast: nil,
                                      errorDescription: "Sign in to Claude Code to see usage.", now: now)
 
         #expect(text == "Claude: Sign in to Claude Code to see usage.")
@@ -111,7 +111,7 @@ import Testing
 
     // The badge keeps the last reading after a failed refresh, so the tooltip is where the user learns it is stale.
     @Test func flagsAFailedRefreshAfterTheLastReading() {
-        let text = UsageText.tooltip(providerName: "Claude", primaryWindow: .fiveHour(percent: 100),
+        let text = UsageText.tooltip(providerName: "Claude", window: .fiveHour(percent: 100),
                                      forecast: .verdict(.willDrain(at: now)), errorDescription: "Can't reach Claude.",
                                      now: now)
 
@@ -123,7 +123,7 @@ import Testing
     }
 
     private func tooltip(_ window: UsageWindow?, _ forecast: DrainForecast?) -> String {
-        UsageText.tooltip(providerName: "Claude", primaryWindow: window, forecast: forecast, errorDescription: nil,
+        UsageText.tooltip(providerName: "Claude", window: window, forecast: forecast, errorDescription: nil,
                           now: now)
     }
 }
