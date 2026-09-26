@@ -114,6 +114,67 @@ import Testing
     }
 }
 
+// Method: readings placed minutes into the fixture window (warm-up ends at 30 minutes, 10% of 5 hours, or at 10%
+// used) and one on a weekly window, each worked out by hand, checking which side of the warm-up it falls on.
+@Suite struct WarmUp {
+    // The session that prompted the warm-up: 3% two minutes in is a 90%/h line projecting ~450%, though usage then
+    // stayed flat for hours. Too little time has passed to tell a burst from a pace, so no verdict and no projection.
+    @Test func burstAtTheStartOfAWindowGivesNoVerdictYet() {
+        let forecast = forecast([sample(hours: 2.0 / 60, 3)], atHour: 2.0 / 60)
+
+        #expect(forecast.outlook == .estimating(until: time(hours: 0.5)))
+        #expect(forecast.projectedPercentAtReset == nil)
+        #expect(forecast.ratePercentPerHour == nil)
+    }
+
+    // 30 minutes in, the warm-up is over: 3% over 0.5h is 6%/h, so 4.5h more adds 27%, 30% at reset.
+    @Test func warmUpEndsAfterATenthOfTheWindow() {
+        let forecast = forecast([sample(hours: 0.5, 3)], atHour: 0.5)
+
+        #expect(forecast.outlook == .willLast)
+        #expect(forecast.projectedPercentAtReset == 30)
+    }
+
+    // 10% used after 10 minutes is ahead of where a pace that just drains the window (20%/h) would be even at the
+    // end of the warm-up, so it is a real warning: 60%/h crosses 100% after another 1h30m, at 1h40m.
+    @Test func usageAheadOfADrainingPaceEndsTheWarmUpEarly() throws {
+        let forecast = forecast([sample(hours: 10.0 / 60, 10)], atHour: 10.0 / 60)
+
+        let rate = try #require(forecast.ratePercentPerHour)
+        #expect(abs(rate - 60) < 1e-9)
+        #expect(isWithinASecond(forecast.outlook, of: time(hours: 1 + 40.0 / 60)))
+    }
+
+    @Test func usageJustBelowTheEarlyExitKeepsEstimating() {
+        let forecast = forecast([sample(hours: 10.0 / 60, 9)], atHour: 10.0 / 60)
+
+        #expect(forecast.outlook == .estimating(until: time(hours: 0.5)))
+    }
+
+    // Drained is a fact, not a projection, so it needs no warm-up.
+    @Test func windowAtItsLimitDrainsNowDuringTheWarmUp() {
+        let forecast = forecast([sample(hours: 5.0 / 60, 100)], atHour: 5.0 / 60)
+
+        #expect(forecast.outlook == .willDrain(at: time(hours: 5.0 / 60)))
+    }
+
+    // The warm-up scales with the window: 12 hours into a week is well under its tenth, 16h48m.
+    @Test func weeklyWindowWarmsUpForATenthOfAWeek() {
+        let weekly = DrainEstimator(windowLength: RollingWindow.week)
+        let windowStart = FixtureWindow.resetsAt.addingTimeInterval(-RollingWindow.week)
+        let noon = windowStart.addingTimeInterval(12 * 3600)
+
+        let forecast = weekly.forecast(samples: [UsageSample(at: noon, percentUsed: 5)],
+                                       resetsAt: FixtureWindow.resetsAt, now: noon)
+
+        #expect(forecast.outlook == .estimating(until: windowStart.addingTimeInterval(16.8 * 3600)))
+    }
+
+    private func forecast(_ samples: [UsageSample], atHour hours: Double) -> DrainForecast {
+        estimator.forecast(samples: samples, resetsAt: FixtureWindow.resetsAt, now: time(hours: hours))
+    }
+}
+
 // Method: the same fixture window, but forecast through the window as the provider reported it, the way the app does.
 @Suite struct ReportedWindowForecast {
     // Polled 10 minutes after the reported reset: the provider has not caught up, so its reading and reset time

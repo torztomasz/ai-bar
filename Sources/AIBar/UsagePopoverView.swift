@@ -148,7 +148,7 @@ private struct WindowRow: View {
 
     @ViewBuilder private var lockoutLine: some View {
         if let forecast {
-            Text(UsageText.lockout(forecast, resetsAt: window.resetsAt))
+            Text(UsageText.lockout(forecast, resetsAt: window.resetsAt, now: now))
                 .fontWeight(isLockedOut ? .semibold : nil)
                 .foregroundStyle(isLockedOut ? AnyShapeStyle(UsageLevel.critical.color) : AnyShapeStyle(.secondary))
                 .fixedSize()

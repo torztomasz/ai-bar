@@ -51,12 +51,16 @@ public enum UsageText {
 
     /// Answers "for how long will I be without this provider?" rather than when it drains, which would leave the
     /// reader to do the date arithmetic.
-    public static func lockout(_ forecast: DrainForecast?, resetsAt: Date?) -> String {
+    /// While estimating it says when the verdict arrives, so an uncoloured badge early in a window reads as
+    /// "wait", not as broken.
+    public static func lockout(_ forecast: DrainForecast?, resetsAt: Date?, now: Date) -> String {
         switch forecast?.outlook {
         case .willDrain:
             return "Locked out\(lockoutLength(forecast, resetsAt: resetsAt))"
         case .willLast:
             return "Lasts to reset"
+        case .estimating(let until):
+            return "Estimate in \(duration(until.timeIntervalSince(now)))"
         case .unknown, nil:
             return "No estimate yet"
         }

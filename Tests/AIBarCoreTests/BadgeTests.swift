@@ -16,6 +16,7 @@ import Testing
     // Colouring a guess would mislead, so anything short of a verdict stays plain.
     @Test func unknownOrMissingForecastIsNeutral() {
         #expect(BadgeTint(forecast: .verdict(.unknown)) == .neutral)
+        #expect(BadgeTint(forecast: .verdict(.estimating(until: Date(timeIntervalSince1970: 0)))) == .neutral)
         #expect(BadgeTint(forecast: nil) == .neutral)
     }
 }

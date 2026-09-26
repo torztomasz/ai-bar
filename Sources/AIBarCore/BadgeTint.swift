@@ -10,7 +10,7 @@ public enum BadgeTint: Sendable {
         switch forecast?.outlook {
         case .willLast: self = .ok
         case .willDrain: self = .danger
-        case .unknown, nil: self = .neutral
+        case .estimating, .unknown, nil: self = .neutral
         }
     }
 }

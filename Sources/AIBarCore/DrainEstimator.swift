@@ -10,6 +10,12 @@ import Foundation
 /// The forecast extends that pace from the latest sample to the reset. Samples outside the window (before its
 /// start, after the reset, or after `now`) are ignored because they describe another window or a clock glitch.
 /// A reading already at 100% is a drained window whatever the pace or reset time.
+///
+/// Early in a window a line is mostly noise: readings move in whole percents and usage comes in bursts, so the 1–3%
+/// of a session's first request, minutes in, projects far past 100%. Until the warm-up ends there is no verdict.
+/// It ends once a tenth of the window has passed, so it scales from 30 minutes to about 17 hours for a week, or
+/// earlier once a tenth of the limit is used: a pace that just drains the window would only get there at the end of
+/// the warm-up, so being there sooner is a real warning, not noise.
 public struct DrainEstimator: Sendable {
     public let windowLength: TimeInterval
 
@@ -30,6 +36,11 @@ public struct DrainEstimator: Sendable {
         if latest.isAtLimit {
             return DrainForecast(outlook: .willDrain(at: now), projectedPercentAtReset: projected,
                                  ratePercentPerHour: rate)
+        }
+        let warmUpEnd = windowStart.addingTimeInterval(windowLength * warmUpFraction)
+        if latest.at < warmUpEnd, latest.percentUsed < limitPercent * warmUpFraction {
+            return DrainForecast(outlook: .estimating(until: warmUpEnd), projectedPercentAtReset: nil,
+                                 ratePercentPerHour: nil)
         }
         guard let rate, let projected else { return .unknown }
         // Also covers an idle or falling pace: with the latest reading below the limit, a rate <= 0 never reaches it.
@@ -63,6 +74,8 @@ public enum DrainOutlook: Equatable, Sendable {
     case willLast
     /// Projected to reach 100% at this time, before the reset; never earlier than the time asked about.
     case willDrain(at: Date)
+    /// Too early in the window to tell a burst from a pace; a verdict comes by this time at the latest.
+    case estimating(until: Date)
     /// No reset time, or no sample in the current window to project from.
     case unknown
 }
@@ -70,9 +83,10 @@ public enum DrainOutlook: Equatable, Sendable {
 /// The outlook plus the numbers behind it, so the UI can explain a verdict (the bar's projected segment, the lockout).
 public struct DrainForecast: Equatable, Sendable {
     public let outlook: DrainOutlook
-    /// `nil` when there is no rate to project with (see `ratePercentPerHour`).
+    /// `nil` when there is no rate to project with (see `ratePercentPerHour`) or while estimating.
     public let projectedPercentAtReset: Double?
-    /// `nil` without a reset time, without in-window samples, or when every sample shares the window-start instant.
+    /// `nil` without a reset time, without in-window samples, while estimating, or when every sample shares the
+    /// window-start instant.
     public let ratePercentPerHour: Double?
 
     static let unknown = DrainForecast(outlook: .unknown, projectedPercentAtReset: nil, ratePercentPerHour: nil)
@@ -86,6 +100,8 @@ public struct DrainForecast: Equatable, Sendable {
 }
 
 private let limitPercent: Double = 100
+/// Share of the window's time, and of its limit, that ends the warm-up; see `DrainEstimator`.
+private let warmUpFraction = 0.1
 
 private extension UsageSample {
     var isAtLimit: Bool { percentUsed >= limitPercent }
