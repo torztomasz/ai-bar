@@ -48,7 +48,7 @@ final class StatusItemController: NSObject {
     /// Text, tint and tooltip all describe the window chosen in settings, so a weekly badge is coloured by the weekly
     /// forecast.
     private func render() {
-        let window = shownState?.snapshot?.window(for: settingsStore.settings.badgeWindowID)
+        let window = shownState?.badgeWindow(for: settingsStore.settings.badgeWindowID)
         let forecast = window.flatMap { shownState?.forecasts[$0.id] }
         let text = UsageText.badge(window: window, hasError: shownState?.lastError != nil)
         let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))
@@ -121,6 +121,7 @@ private final class RefreshBlink {
 
     /// Ease-out and brief: the badge is glanced at, not watched.
     private static let duration: TimeInterval = 0.15
+    /// Shallow: on a coloured capsule a small change already reads as a blink, and the reading stays legible.
     private static let dimmedAlpha: CGFloat = 0.6
 
     /// Layer-backed so the fade runs in Core Animation; otherwise AppKit steps `alphaValue` on a timer, which stalls

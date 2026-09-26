@@ -57,8 +57,8 @@ struct SettingsView: View {
     /// Lists what the badge would actually show: a stored choice the snapshot no longer reports is displayed as the
     /// primary window it falls back to. Before the first snapshot only the default can be named.
     private var badgeWindowPicker: some View {
-        let snapshot = usage.states.first?.snapshot
-        let shownWindowID = snapshot?.window(for: settingsStore.settings.badgeWindowID)?.id
+        let state = usage.states.first
+        let shownWindowID = state?.badgeWindow(for: settingsStore.settings.badgeWindowID)?.id
         return Picker("Show in menu bar", selection: Binding(
             get: { shownWindowID },
             set: { windowID in settingsStore.update { $0.badgeWindowID = windowID } }
@@ -66,7 +66,7 @@ struct SettingsView: View {
             if shownWindowID == nil {
                 Text("5-hour (default)").tag(String?.none)
             }
-            ForEach(snapshot?.windows ?? []) { window in
+            ForEach(state?.snapshot?.windows ?? []) { window in
                 Text(window.title).tag(String?.some(window.id))
             }
         }

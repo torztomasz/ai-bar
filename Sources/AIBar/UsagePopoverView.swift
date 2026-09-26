@@ -44,7 +44,7 @@ struct UsagePopoverView: View {
             }
             // ⌘, is the standard Settings shortcut; an accessory app has no menu bar to carry it, so the button does.
             Button(action: onOpenSettings) {
-                FooterIcon(systemName: "gearshape")
+                FooterIcon(systemName: "gearshape", label: "Settings")
             }
             .buttonStyle(.borderless)
             .help("Settings")
@@ -53,7 +53,7 @@ struct UsagePopoverView: View {
                 Button("Quit AI Bar", action: onQuit)
                     .keyboardShortcut("q", modifiers: .command)
             } label: {
-                FooterIcon(systemName: "ellipsis.circle")
+                FooterIcon(systemName: "ellipsis.circle", label: "More")
             }
             // Plain keeps the label at the size of its neighbours; borderless menu styles shrink it.
             .menuStyle(.button)
@@ -96,7 +96,7 @@ private struct ProviderSection: View {
         HStack(alignment: .firstTextBaseline) {
             Text(state.displayName).font(.headline)
             Spacer()
-            if let resetsAt = state.snapshot?.window(for: badgeWindowID)?.resetsAt {
+            if let resetsAt = state.badgeWindow(for: badgeWindowID)?.resetsAt {
                 Text(UsageText.resetsIn(resetsAt, now: now))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -164,8 +164,11 @@ private struct WindowRow: View {
 /// Stands in for window rows until the first reading arrives, in their shape, so the popover does not jump when the
 /// data lands. Static rather than shimmering: loading takes about a second and needs no attention drawn to it.
 private struct LoadingRows: View {
+    /// Claude reports three windows, so the placeholder has the height of the rows it stands in for.
+    private static let rowCount = 3
+
     var body: some View {
-        ForEach(0..<3, id: \.self) { _ in
+        ForEach(0..<Self.rowCount, id: \.self) { _ in
             VStack(alignment: .leading, spacing: 4) {
                 Text("Weekly · Model")
                 Capsule().fill(.quaternary).frame(height: UsageBarView.height)
@@ -233,12 +236,13 @@ private struct RefreshButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spin = RefreshSpin()
 
+    /// Deeper than the menu bar pill's 0.6: this icon is already secondary, so a shallow dim would not register.
     private static let dimmedOpacity = 0.4
 
     var body: some View {
         Button(action: action) {
-            TimelineView(SpinSchedule(spin: spin)) { context in
-                FooterIcon(systemName: "arrow.clockwise")
+            TimelineView(.animation(paused: !spin.isMoving(at: .now))) { context in
+                FooterIcon(systemName: "arrow.clockwise", label: "Refresh")
                     .rotationEffect(.degrees(spin.degrees(at: context.date)))
             }
         }
@@ -248,33 +252,30 @@ private struct RefreshButton: View {
         .animation(.easeOut(duration: 0.15)) {
             $0.opacity(reduceMotion && isRefreshing ? Self.dimmedOpacity : 1)
         }
-        .onChange(of: isRefreshing, initial: true) { _, refreshing in
-            if refreshing && !reduceMotion {
-                spin.start(at: .now)
-            } else {
-                spin.stop(at: .now)
-            }
+        .onChange(of: isRefreshing, initial: true) { followRefreshing() }
+        // Turning Reduce Motion on mid-refresh stops the spin; the dim takes over.
+        .onChange(of: reduceMotion) { followRefreshing() }
+        .task(id: spin) {
+            // The timeline only re-reads `paused` when the view updates, so end the settle once it is over.
+            guard (try? await Task.sleep(for: .seconds(RefreshSpin.settleDuration))) != nil else { return }
+            spin.finishSettling(at: .now)
         }
     }
-}
 
-/// Frames at display rate for as long as the spin moves, then none, so an idle icon costs nothing to draw.
-private struct SpinSchedule: TimelineSchedule {
-    let spin: RefreshSpin
-
-    private static let frameInterval: TimeInterval = 1.0 / 120
-
-    func entries(from startDate: Date, mode: TimelineScheduleMode) -> some Sequence<Date> {
-        // One frame past the end of the motion, so the last one drawn is the resting angle.
-        sequence(first: startDate) { date in
-            spin.isMoving(at: date) ? date.addingTimeInterval(Self.frameInterval) : nil
+    private func followRefreshing() {
+        if isRefreshing && !reduceMotion {
+            spin.start(at: .now)
+        } else {
+            spin.stop(at: .now)
         }
     }
 }
 
 /// Footer icons stay secondary so the data above them leads, and brighten under the pointer to show they are live.
+/// `label` is what VoiceOver reads instead of the symbol's name.
 private struct FooterIcon: View {
     let systemName: String
+    let label: String
 
     @State private var isHovered = false
 
@@ -285,6 +286,7 @@ private struct FooterIcon: View {
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(isHovered ? .primary : .secondary)
             .onHover { isHovered = $0 }
+            .accessibilityLabel(label)
     }
 }
 

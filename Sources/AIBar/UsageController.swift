@@ -128,6 +128,12 @@ struct ProviderState: Identifiable {
 
     /// Derived rather than stored so it can never disagree with the snapshot it describes.
     var lastRefreshedAt: Date? { snapshot?.fetchedAt }
+
+    /// The window the badge shows for the user's choice `id` (see `UsageSnapshot.window(for:)`); nil before the
+    /// first reading.
+    func badgeWindow(for id: String?) -> UsageWindow? {
+        snapshot?.window(for: id)
+    }
 }
 
 private func fetchResult(from provider: any UsageProvider) async -> Result<UsageSnapshot, any Error> {
