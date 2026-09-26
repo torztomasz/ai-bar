@@ -80,8 +80,8 @@ public enum ClaudeUsageError: Error, LocalizedError {
         case .notLoggedIn: "Sign in to Claude Code to see usage."
         case .tokenExpired: "Your Claude Code session expired. Open Claude Code to renew it."
         case .network: "Can't reach Claude. Check your internet connection."
-        case .http(let status): "Claude usage is unavailable right now (HTTP \(status))."
-        case .decoding: "Claude sent usage data AI Bar cannot read."
+        case .http(let status): "Claude usage is unavailable right now (HTTP \(status)). AI Bar will try again."
+        case .decoding: "AI Bar can't read Claude's usage data. Update AI Bar to see usage."
         }
     }
 }
