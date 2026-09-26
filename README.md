@@ -13,9 +13,12 @@ log in to. More providers plug in behind the `UsageProvider` protocol.
   first, plain text when there is not enough data yet.
 - **Left click** opens a popover with every limit window: 5-hour, weekly, and weekly per model.
   Each bar is green below 70%, yellow from 70%, red from 90%. A translucent segment behind the bar
-  shows the projected usage at reset, and a line underneath says how long you will be locked out
-  (`Locked out for ~1h 20m`, in red) or that the window `Lasts to reset`.
-- **Right click** refreshes immediately. The app also polls every 5 minutes and after the Mac wakes.
+  shows the projected usage at reset, and a thin cursor marks how much of the window's time has
+  passed: a fill past the cursor means usage is running ahead of time. A line underneath says how
+  long you will be locked out (`Locked out for ~1h 20m`, or `~2d 19h` for a day or more, in red) or
+  that the window `Lasts to reset`.
+- **Right click**, or the refresh icon in the popover, refreshes immediately; the pill blinks and the
+  icon turns while it runs. The app also polls every 5 minutes and after the Mac wakes.
 - Hover the pill for a tooltip with the reset countdown and, when you are on pace to run out, the lockout.
 
 ## How the forecast works

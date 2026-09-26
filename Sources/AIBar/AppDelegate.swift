@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let popover = UsagePopoverView(controller: usage, onOpenSettings: { [weak self] in
+        let popover = UsagePopoverView(controller: usage, settingsStore: settingsStore, onOpenSettings: { [weak self] in
             self?.openSettings()
         }, onQuit: {
             NSApplication.shared.terminate(nil)
