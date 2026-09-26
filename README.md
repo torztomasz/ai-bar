@@ -49,6 +49,17 @@ popover says to sign in to Claude Code.
 - Xcode 16 or newer (Swift 6 toolchain)
 - Claude Code installed and signed in
 
+## Install or update
+
+```
+make install   # or scripts/install.sh
+```
+
+The same command does both jobs. It pulls the latest code (fast-forward only, so it stops instead of merging
+into a checkout that has diverged), builds a release bundle, quits any running copy, puts the new one in
+`/Applications` (`~/Applications` if that is not writable) and launches it. Settings and forecast history
+are kept, because they live outside the bundle.
+
 ## Build and run
 
 ```

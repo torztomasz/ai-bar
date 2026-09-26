@@ -1,6 +1,6 @@
 APP_BUNDLE := dist/AI Bar.app
 
-.PHONY: build test app run
+.PHONY: build test app run install
 
 build:
 	swift build
@@ -18,3 +18,7 @@ app:
 
 run: app
 	open "$(APP_BUNDLE)"
+
+# Installs into /Applications, or updates an existing install: pull, rebuild, quit the old copy, relaunch.
+install:
+	scripts/install.sh
