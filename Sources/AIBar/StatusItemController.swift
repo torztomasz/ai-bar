@@ -13,6 +13,7 @@ final class StatusItemController: NSObject {
     private let settingsStore: SettingsStore
     private var shownState: ProviderState?
     private var tooltipClock: Timer?
+    private lazy var refreshBlink = RefreshBlink(button: statusItem.button)
 
     init(popoverContent: some View, settingsStore: SettingsStore) {
         self.settingsStore = settingsStore
@@ -32,6 +33,7 @@ final class StatusItemController: NSObject {
     func show(_ state: ProviderState?) {
         shownState = state
         render()
+        refreshBlink.follow(isRefreshing: state?.isRefreshing ?? false)
     }
 
     func settingsDidChange() {
@@ -104,6 +106,57 @@ final class StatusItemController: NSObject {
             // would not receive the outside click that should dismiss it.
             NSApp.activate()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+    }
+}
+
+/// Dims the badge while a refresh runs, so a right-click refresh is acknowledged where the user clicked. Opacity only,
+/// so it stays under Reduce Motion. The dip always finishes before the rise: a refresh faster than the dip reads as a
+/// single blink instead of a flicker cut short.
+@MainActor
+private final class RefreshBlink {
+    private weak var button: NSStatusBarButton?
+    private var isRefreshing = false
+    private var isDipping = false
+
+    /// Ease-out and brief: the badge is glanced at, not watched.
+    private static let duration: TimeInterval = 0.15
+    private static let dimmedAlpha: CGFloat = 0.6
+
+    /// Layer-backed so the fade runs in Core Animation; otherwise AppKit steps `alphaValue` on a timer, which stalls
+    /// whenever the display is not refreshing and leaves the badge dimmed.
+    init(button: NSStatusBarButton?) {
+        self.button = button
+        button?.wantsLayer = true
+    }
+
+    /// Reacts only to a change, since every state update passes through here.
+    func follow(isRefreshing refreshing: Bool) {
+        guard refreshing != isRefreshing else { return }
+        isRefreshing = refreshing
+        if refreshing {
+            dip()
+        } else if !isDipping {
+            fade(to: 1)
+        }
+    }
+
+    private func dip() {
+        isDipping = true
+        fade(to: Self.dimmedAlpha) { [weak self] in
+            guard let self else { return }
+            isDipping = false
+            if !isRefreshing { fade(to: 1) }
+        }
+    }
+
+    private func fade(to alpha: CGFloat, then completion: (@MainActor () -> Void)? = nil) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            button?.animator().alphaValue = alpha
+        } completionHandler: {
+            MainActor.assumeIsolated { completion?() }
         }
     }
 }
