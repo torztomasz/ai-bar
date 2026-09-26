@@ -68,23 +68,37 @@ public enum UsageText {
     }
 
     /// ` for ~1h 20m`, approximate because the drain time is a projection; empty when no reset time says when the
-    /// lockout ends. A lockout of a day or more is rounded to the hour (` for ~2d 19h`): a projection days out is not
-    /// good to the minute.
+    /// lockout ends.
     private static func lockoutLength(_ forecast: DrainForecast?, resetsAt: Date?) -> String {
         guard let length = forecast?.lockout(resetsAt: resetsAt) else { return "" }
-        guard length >= RollingWindow.day else { return " for ~\(duration(length))" }
-        let totalHours = Int((length / RollingWindow.secondsPerHour).rounded())
-        return " for ~\(totalHours / 24)d \(totalHours % 24)h"
+        return " for ~\(length >= RollingWindow.day ? daysAndHours(length) : duration(length))"
     }
 
     /// `2h 13m`, `4d 3h 12m`: leading zero units are dropped, and anything under a minute reads `<1m` rather than
     /// `0m`, which would suggest the moment has passed.
     static func duration(_ interval: TimeInterval) -> String {
-        let totalMinutes = Int(interval / 60)
-        guard totalMinutes > 0 else { return "<1m" }
-        let (days, hours, minutes) = (totalMinutes / 1440, totalMinutes / 60 % 24, totalMinutes % 60)
-        if days > 0 { return "\(days)d \(hours)h \(minutes)m" }
-        if hours > 0 { return "\(hours)h \(minutes)m" }
-        return "\(minutes)m"
+        let parts = DurationParts(minutes: Int(interval / 60))
+        if parts.days > 0 { return "\(parts.days)d \(parts.hours)h \(parts.minutes)m" }
+        if parts.hours > 0 { return "\(parts.hours)h \(parts.minutes)m" }
+        return parts.minutes > 0 ? "\(parts.minutes)m" : "<1m"
+    }
+
+    /// `2d 19h`, `2d`: to the nearest hour, for spans of a day or more where minutes would claim precision a
+    /// projection days out does not have.
+    private static func daysAndHours(_ interval: TimeInterval) -> String {
+        let wholeHours = Int((interval / RollingWindow.secondsPerHour).rounded())
+        let parts = DurationParts(minutes: wholeHours * 60)
+        return parts.hours > 0 ? "\(parts.days)d \(parts.hours)h" : "\(parts.days)d"
+    }
+}
+
+/// A span split into the units the text shows it in.
+private struct DurationParts {
+    let days: Int
+    let hours: Int
+    let minutes: Int
+
+    init(minutes totalMinutes: Int) {
+        (days, hours, minutes) = (totalMinutes / 1440, totalMinutes / 60 % 24, totalMinutes % 60)
     }
 }

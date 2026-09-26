@@ -68,6 +68,22 @@ import Testing
         #expect(isAbout(spin.degrees(at: at(0.9)), angleAtRestart + 180))
     }
 
+    // A view pausing its timeline on `isMoving` needs a state change once the settle is over to redraw and pause;
+    // finishing early must not cut the settle short.
+    @Test func finishingTheSettleChangesTheSpinOnlyOnceItIsOver() {
+        var spin = RefreshSpin()
+        spin.start(at: at(0))
+        spin.stop(at: at(0.4))
+        let settling = spin
+
+        spin.finishSettling(at: at(0.5))
+        #expect(spin == settling)
+        spin.finishSettling(at: at(0.65))
+        #expect(spin != settling)
+        #expect(isAbout(spin.degrees(at: at(0.66)), 360))
+        #expect(!spin.isMoving(at: at(0.66)))
+    }
+
     // Start and stop follow a refreshing flag that may be set again without changing.
     @Test func repeatedStartOrStopChangesNothing() {
         var spin = RefreshSpin()

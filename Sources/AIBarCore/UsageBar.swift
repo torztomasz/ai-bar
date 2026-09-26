@@ -25,7 +25,7 @@ public struct UsageBar: Equatable, Sendable {
         }
 
         init(percent: Double) {
-            self.init(fraction: min(max(percent, 0), 100) / 100, level: UsageLevel(percent: percent))
+            self.init(fraction: percent.clamped(to: 0...100) / 100, level: UsageLevel(percent: percent))
         }
     }
 
@@ -47,7 +47,7 @@ public struct UsageBar: Equatable, Sendable {
     private static func elapsedFraction(of window: UsageWindow, now: Date) -> Double? {
         guard let resetsAt = window.resetsAt, let length = window.kind.length else { return nil }
         let start = RollingWindow.start(resetsAt: resetsAt, length: length)
-        return min(max(now.timeIntervalSince(start) / length, 0), 1)
+        return (now.timeIntervalSince(start) / length).clamped(to: 0...1)
     }
 }
 

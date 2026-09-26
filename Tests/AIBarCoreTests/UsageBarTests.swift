@@ -22,8 +22,8 @@ import Testing
     }
 }
 
-// Method: build bars from a reading and a projection the way the popover does, and assert on the fractions of the
-// bar's width and the levels that colour them. Fractions are hand-picked percents divided by 100.
+// Method: build bars straight from a reading and a projection, and assert on the fractions of the bar's width and
+// the levels that colour them. Fractions are hand-picked percents divided by 100.
 @Suite struct UsageBarGeometry {
     // The fill speaks for now (60%, green); the estimate for the reset (95%, red), so a bar warns ahead of time.
     @Test func fillFollowsTheReadingAndEstimateFollowsTheProjection() {

@@ -69,6 +69,13 @@ import Testing
         #expect(UsageText.lockout(forecast, resetsAt: after(hours: 2 * 24 + 18, minutes: 40)) == "Locked out for ~2d 19h")
     }
 
+    // 2d 0h 20m rounds to a whole number of days; "~2d 0h" would spell out a zero.
+    @Test func lockoutOfWholeDaysLeavesOutZeroHours() {
+        let forecast = DrainForecast.verdict(.willDrain(at: now))
+
+        #expect(UsageText.lockout(forecast, resetsAt: after(hours: 2 * 24, minutes: 20)) == "Locked out for ~2d")
+    }
+
     // 23h 50m is under a day, so it keeps its minutes rather than rounding up into "~1d 0h".
     @Test func lockoutUnderADayKeepsItsMinutes() {
         let forecast = DrainForecast.verdict(.willDrain(at: now))
