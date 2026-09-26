@@ -37,6 +37,11 @@ final class UsageController: ObservableObject {
         states.contains(where: \.isRefreshing)
     }
 
+    /// True while any provider's latest fetch failed, whose data is then out of date.
+    var hasFailedRefresh: Bool {
+        states.contains { $0.lastError != nil }
+    }
+
     /// Refreshes now and every refresh interval after, and again on wake because a sleeping Mac misses polls and
     /// the reading it last showed may be hours old. Calling it again does nothing.
     func start() {

@@ -45,7 +45,8 @@ extension BadgeTint {
         }
     }
 
-    fileprivate var textColor: NSColor {
+    /// Also the colour of the light that runs round the badge during a refresh, so it shows on every tint.
+    var textColor: NSColor {
         switch self {
         case .neutral: .labelColor
         case .ok, .danger: .white

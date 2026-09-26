@@ -17,8 +17,8 @@ log in to. More providers plug in behind the `UsageProvider` protocol.
   passed: a fill past the cursor means usage is running ahead of time. A line underneath says how
   long you will be locked out (`Locked out for ~1h 20m`, or `~2d 19h` for a day or more, in red) or
   that the window `Lasts to reset`.
-- **Right click**, or the refresh icon in the popover, refreshes immediately; the pill blinks and the
-  icon turns while it runs. The app also polls every 5 minutes and after the Mac wakes.
+- **Right click**, or the refresh icon in the popover, refreshes immediately; a light runs round the pill
+  and the icon turns while it runs, and the icon shows a checkmark once fresh data is in. The app also polls every 5 minutes and after the Mac wakes.
 - Hover the pill for a tooltip with the reset countdown and, when you are on pace to run out, the lockout.
 
 ## How the forecast works

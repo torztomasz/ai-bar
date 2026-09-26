@@ -4,8 +4,9 @@ import SwiftUI
 /// Popover shown on left click: every provider's windows with reset times and forecasts, and a footer to refresh,
 /// open Settings or quit.
 ///
-/// Motion is brief and only marks a change of state: the refresh icon turns while data is on its way, and values
-/// that change settle into place. With Reduce Motion on, movement is dropped and only opacity fades remain.
+/// Motion is brief and only marks a change of state: the refresh icon turns while data is on its way and confirms
+/// its arrival, and values that change settle into place. With Reduce Motion on, movement is dropped and only
+/// opacity fades remain.
 struct UsagePopoverView: View {
     @ObservedObject var controller: UsageController
     /// Only for which window's reset the header counts down to.
@@ -39,7 +40,7 @@ struct UsagePopoverView: View {
                 .contentTransition(.opacity)
                 .animation(.easeOut(duration: 0.2), value: updated)
             Spacer()
-            RefreshButton(isRefreshing: controller.isRefreshing) {
+            RefreshButton(isRefreshing: controller.isRefreshing, hasFailed: controller.hasFailedRefresh) {
                 Task { await controller.refresh() }
             }
             // ⌘, is the standard Settings shortcut; an accessory app has no menu bar to carry it, so the button does.
@@ -227,22 +228,36 @@ private struct UsageBarView: View {
     }
 }
 
-/// Turns while a refresh runs and settles upright when it ends (see `RefreshSpin`). With Reduce Motion on it stays
-/// still and dims instead, so the state still shows.
+/// Turns while a refresh runs and settles upright when it ends (see `RefreshSpin`), then briefly turns into a
+/// checkmark if the refresh succeeded, so the user learns it worked without reading the timestamp. A failure gets no
+/// checkmark: its message already shows above. With Reduce Motion on the icon stays still and dims instead of turning,
+/// and the checkmark fades in and out rather than morphing.
 private struct RefreshButton: View {
     let isRefreshing: Bool
+    let hasFailed: Bool
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spin = RefreshSpin()
+    @State private var showsCheck = false
+    /// Counts successful refreshes, so each starts its own confirmation and cancels a previous one still showing.
+    @State private var confirmations = 0
 
-    /// Deeper than the menu bar pill's 0.6: this icon is already secondary, so a shallow dim would not register.
+    /// Deep, because this icon is already secondary: a shallow dim would not register.
     private static let dimmedOpacity = 0.4
+    /// Long enough to register at a glance, short enough not to be mistaken for a state.
+    private static let checkHold: Duration = .seconds(1)
+    /// A gentle spring for the checkmark's arrival; bounce is kept low, as it is only confirming.
+    private static let checkArrival = Animation.spring(duration: 0.3, bounce: 0.2)
+    /// Faster than the arrival: by then the checkmark is only getting out of the way.
+    private static let checkDeparture = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.15)
 
     var body: some View {
         Button(action: action) {
             TimelineView(.animation(paused: !spin.isMoving(at: .now))) { context in
-                FooterIcon(systemName: "arrow.clockwise", label: "Refresh")
+                FooterIcon(systemName: showsCheck ? "checkmark" : "arrow.clockwise", label: "Refresh",
+                           emphasis: showsCheck ? .green : nil)
+                    .contentTransition(reduceMotion ? .opacity : .symbolEffect(.replace.downUp))
                     .rotationEffect(.degrees(spin.degrees(at: context.date)))
             }
         }
@@ -253,12 +268,23 @@ private struct RefreshButton: View {
             $0.opacity(reduceMotion && isRefreshing ? Self.dimmedOpacity : 1)
         }
         .onChange(of: isRefreshing, initial: true) { followRefreshing() }
+        .onChange(of: isRefreshing) { wasRefreshing, refreshing in
+            if refreshing {
+                showsCheck = false
+            } else if wasRefreshing && !hasFailed {
+                confirmations += 1
+            }
+        }
         // Turning Reduce Motion on mid-refresh stops the spin; the dim takes over.
         .onChange(of: reduceMotion) { followRefreshing() }
         .task(id: spin) {
             // The timeline only re-reads `paused` when the view updates, so end the settle once it is over.
             guard (try? await Task.sleep(for: .seconds(RefreshSpin.settleDuration))) != nil else { return }
             spin.finishSettling(at: .now)
+        }
+        .task(id: confirmations) {
+            guard confirmations > 0 else { return }
+            await confirm()
         }
     }
 
@@ -269,13 +295,23 @@ private struct RefreshButton: View {
             spin.stop(at: .now)
         }
     }
+
+    /// Waits for the spin to land upright first, so the checkmark never appears tilted.
+    private func confirm() async {
+        guard (try? await Task.sleep(for: .seconds(RefreshSpin.settleDuration))) != nil else { return }
+        withAnimation(Self.checkArrival) { showsCheck = true }
+        guard (try? await Task.sleep(for: Self.checkHold)) != nil else { return }
+        withAnimation(Self.checkDeparture) { showsCheck = false }
+    }
 }
 
 /// Footer icons stay secondary so the data above them leads, and brighten under the pointer to show they are live.
-/// `label` is what VoiceOver reads instead of the symbol's name.
+/// `label` is what VoiceOver reads instead of the symbol's name. `emphasis` replaces both colours for a moment that
+/// must stand out.
 private struct FooterIcon: View {
     let systemName: String
     let label: String
+    var emphasis: Color?
 
     @State private var isHovered = false
 
@@ -284,9 +320,14 @@ private struct FooterIcon: View {
             .font(.system(size: 16))
             // A menu label is otherwise redrawn as a template in the primary colour, whatever its foreground style.
             .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(isHovered ? .primary : .secondary)
+            .foregroundStyle(foreground)
             .onHover { isHovered = $0 }
             .accessibilityLabel(label)
+    }
+
+    private var foreground: AnyShapeStyle {
+        if let emphasis { return AnyShapeStyle(emphasis) }
+        return isHovered ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
     }
 }
 
