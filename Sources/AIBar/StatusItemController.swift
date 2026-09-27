@@ -45,16 +45,14 @@ final class StatusItemController: NSObject {
         popover.performClose(nil)
     }
 
-    /// Text, tint and tooltip all describe the window chosen in settings, so a weekly badge is coloured by the weekly
-    /// forecast.
+    /// Text and tooltip both describe the window chosen in settings.
     private func render() {
         let window = shownState?.badgeWindow(for: settingsStore.settings.badgeWindowID)
         let forecast = window.flatMap { shownState?.forecasts[$0.id] }
         let text = UsageText.badge(window: window, hasError: shownState?.lastError != nil)
         let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))
-        let tint = BadgeTint(forecast: forecast)
-        statusItem.button?.image = BadgeRenderer.image(text: text, tint: tint, height: height)
-        refreshTracer.fit(tint: tint)
+        statusItem.button?.image = BadgeRenderer.image(text: text, height: height)
+        refreshTracer.fit()
         statusItem.button?.toolTip = shownState.map { state in
             UsageText.tooltip(providerName: state.displayName, window: window, forecast: forecast,
                               errorDescription: state.lastError?.localizedDescription, now: Date())
@@ -158,11 +156,11 @@ private final class PillTracer: NSObject {
     }
 
     /// Called after every badge redraw: the capsule widens and narrows with its text, and the light takes the
-    /// colour of the text, so it shows on a coloured capsule and on the plain neutral badge alike.
-    func fit(tint: BadgeTint) {
+    /// menu bar's text colour, so it matches the reading.
+    func fit() {
         guard let button, let cell = button.cell else { return }
-        let rect = cell.imageRect(forBounds: button.bounds)
-        let color = button.effectiveAppearance.resolved(tint.textColor)
+        let rect = capsule(around: cell.imageRect(forBounds: button.bounds), in: button.bounds)
+        let color = button.effectiveAppearance.resolved(.labelColor)
         withoutImplicitAnimation {
             light.strokeColor = color
             light.shadowColor = color
@@ -176,6 +174,12 @@ private final class PillTracer: NSObject {
                                                                                            dy: lineWidth / 2),
                                         topAtMinY: button.isFlipped)
         }
+    }
+
+    /// The image is only as wide as its text, so a capsule that tight would run through the digits; the button's own
+    /// spacing either side gives the light room to pass round them.
+    private func capsule(around image: CGRect, in bounds: CGRect) -> CGRect {
+        CGRect(x: bounds.minX, y: image.minY, width: bounds.width, height: image.height)
     }
 
     /// Linked to the button's display, so the light moves in step with the screen it is on, including while a

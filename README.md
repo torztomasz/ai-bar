@@ -8,9 +8,8 @@ log in to. More providers plug in behind the `UsageProvider` protocol.
 
 ## What you see
 
-- **Menu bar pill** with the 5-hour window usage, for example `42%`.
-  Green when the current pace leaves headroom until the window resets, red when it will be drained
-  first, plain text when there is not enough data yet.
+- **Menu bar reading** with the 5-hour window usage, for example `42%`, in the menu bar's own text colour
+  like the clock beside it. Whether you are on pace to run out shows in the tooltip and the popover.
 - **Left click** opens a popover with every limit window: 5-hour, weekly, and weekly per model.
   Each bar is green below 70%, yellow from 70%, red from 90%. A translucent segment behind the bar
   shows the projected usage at reset, and a thin cursor marks how much of the window's time has

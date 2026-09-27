@@ -3,24 +3,7 @@ import Testing
 @testable import AIBarCore
 
 // Method (both suites): build the badge from hand-made windows and forecasts, the same inputs the app passes after a
-// refresh, and assert on the exact text and tint the menu bar would draw.
-@Suite struct BadgeTintFromForecast {
-    @Test func windowThatWillLastIsGreen() {
-        #expect(BadgeTint(forecast: .verdict(.willLast)) == .ok)
-    }
-
-    @Test func windowThatWillDrainIsRed() {
-        #expect(BadgeTint(forecast: .verdict(.willDrain(at: Date(timeIntervalSince1970: 0)))) == .danger)
-    }
-
-    // Colouring a guess would mislead, so anything short of a verdict stays plain.
-    @Test func unknownOrMissingForecastIsNeutral() {
-        #expect(BadgeTint(forecast: .verdict(.unknown)) == .neutral)
-        #expect(BadgeTint(forecast: .verdict(.estimating(until: Date(timeIntervalSince1970: 0)))) == .neutral)
-        #expect(BadgeTint(forecast: nil) == .neutral)
-    }
-}
-
+// refresh, and assert on the exact text and size the menu bar would draw.
 @Suite struct BadgeText {
     @Test func showsTheWindowPercentRoundedToAWholeNumber() {
         #expect(UsageText.badge(window: .fiveHour(percent: 42.4), hasError: false) == "42%")

@@ -9,8 +9,6 @@ import SwiftUI
 /// opacity fades remain.
 struct UsagePopoverView: View {
     @ObservedObject var controller: UsageController
-    /// Only for which window's reset the header counts down to.
-    let settingsStore: SettingsStore
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
@@ -20,8 +18,7 @@ struct UsagePopoverView: View {
         TimelineView(.periodic(from: .now, by: 15)) { context in
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(controller.states) { state in
-                    ProviderSection(state: state, badgeWindowID: settingsStore.settings.badgeWindowID,
-                                    now: context.date)
+                    ProviderSection(state: state, now: context.date)
                 }
                 footer(now: context.date)
                     .padding(.top, 4)
@@ -71,12 +68,11 @@ struct UsagePopoverView: View {
 /// information available.
 private struct ProviderSection: View {
     let state: ProviderState
-    let badgeWindowID: String?
     let now: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header
+            Text(state.displayName).font(.headline)
             if let error = state.lastError {
                 Text(error.localizedDescription)
                     .foregroundStyle(.secondary)
@@ -88,19 +84,6 @@ private struct ProviderSection: View {
                 }
             } else if state.lastError == nil {
                 LoadingRows()
-            }
-        }
-    }
-
-    /// The countdown the menu bar badge stands for is the one most worth seeing first.
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(state.displayName).font(.headline)
-            Spacer()
-            if let resetsAt = state.badgeWindow(for: badgeWindowID)?.resetsAt {
-                Text(UsageText.resetsIn(resetsAt, now: now))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
         }
     }
