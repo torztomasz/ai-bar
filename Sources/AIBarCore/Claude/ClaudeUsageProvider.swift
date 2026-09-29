@@ -5,7 +5,8 @@ import Foundation
 /// Token refresh is deliberately left to Claude Code, which refreshes the Keychain item while in use;
 /// an expired token surfaces as `ClaudeUsageError.tokenExpired`.
 public struct ClaudeUsageProvider: UsageProvider {
-    public let id = ProviderID("claude")
+    public static let providerID = ProviderID("claude")
+    public let id = ClaudeUsageProvider.providerID
     public let displayName = "Claude"
     private let credentials: any CredentialSource
     private let transport: any HTTPTransport

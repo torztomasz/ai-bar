@@ -3,9 +3,9 @@ import Foundation
 /// Timing of rolling usage windows, kept in one place so the estimator and the sample store agree on which samples
 /// belong to the current window.
 public enum RollingWindow {
-    /// Claude's session limit resets 5 hours after the request that opened the window.
+    /// Claude's and ChatGPT's session limits reset 5 hours after the request that opened the window.
     public static let fiveHours: TimeInterval = 5 * secondsPerHour
-    /// Claude's weekly limits, overall and per model, reset 7 days after the window opened.
+    /// Weekly limits, overall and per model, reset 7 days after the window opened.
     public static let week: TimeInterval = 7 * day
 
     static let secondsPerHour: TimeInterval = 3600

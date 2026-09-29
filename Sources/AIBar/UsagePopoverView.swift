@@ -20,6 +20,11 @@ struct UsagePopoverView: View {
                 ForEach(controller.states) { state in
                     ProviderSection(state: state, now: context.date)
                 }
+                if controller.states.isEmpty {
+                    Text(UsageText.noProviders)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 footer(now: context.date)
                     .padding(.top, 4)
             }

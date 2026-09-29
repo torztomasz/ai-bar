@@ -5,7 +5,7 @@ import AppKit
 /// publishes the result for the badge and the popover.
 @MainActor
 final class UsageController: ObservableObject {
-    /// One entry per provider, in the order the popover lists them.
+    /// One entry per provider the user has turned on, in the order the badge and the popover list them.
     @Published private(set) var states: [ProviderState] {
         didSet { onStatesChanged(states) }
     }
@@ -13,7 +13,8 @@ final class UsageController: ObservableObject {
     /// For AppKit consumers (the status item) that cannot observe SwiftUI state.
     var onStatesChanged: ([ProviderState]) -> Void = { _ in }
 
-    private let providers: [any UsageProvider]
+    /// Every provider the app knows, turned on or not.
+    let providers: [any UsageProvider]
     private let settingsStore: SettingsStore
     private let forecaster = WindowForecaster.inApplicationSupport()
     private var pollingTask: Task<Void, Never>?
@@ -23,7 +24,8 @@ final class UsageController: ObservableObject {
     init(providers: [any UsageProvider], settingsStore: SettingsStore) {
         self.providers = providers
         self.settingsStore = settingsStore
-        states = providers.map { ProviderState(id: $0.id, displayName: $0.displayName) }
+        states = providers.filter { settingsStore.settings.placement(of: $0.id).isFetched }
+            .map { ProviderState(id: $0.id, displayName: $0.displayName) }
     }
 
     /// The stalest provider's refresh time, since a single "Updated … ago" vouches for all the data shown;
@@ -59,6 +61,7 @@ final class UsageController: ObservableObject {
     /// A new interval starts counting from now instead of after the old one runs out, so going from 15 minutes to 1
     /// takes effect within a minute.
     func settingsDidChange() {
+        showEnabledProviders()
         guard pollingTask != nil, settingsStore.settings.refreshInterval != pollingInterval else { return }
         startPolling()
     }
@@ -67,21 +70,33 @@ final class UsageController: ObservableObject {
     /// asked twice. A failed fetch keeps the previous snapshot, so the badge shows the last known reading.
     func refresh() async {
         Log.app.notice("refreshing usage")
-        let due = states.indices.filter { !states[$0].isRefreshing }
+        let due = Set(states.filter { !$0.isRefreshing }.map(\.id))
         // Marked on a copy so observers redraw once, not once per provider.
         var marked = states
-        for index in due {
+        for index in marked.indices where due.contains(marked[index].id) {
             marked[index].isRefreshing = true
         }
         states = marked
-        await withTaskGroup(of: (Int, Result<UsageSnapshot, any Error>).self) { group in
-            for index in due {
-                let provider = providers[index]
-                group.addTask { (index, await fetchResult(from: provider)) }
+        await withTaskGroup(of: (ProviderID, Result<UsageSnapshot, any Error>).self) { group in
+            for provider in providers where due.contains(provider.id) {
+                group.addTask { (provider.id, await fetchResult(from: provider)) }
             }
-            for await (index, result) in group {
-                apply(result, toProviderAt: index)
+            for await (id, result) in group {
+                apply(result, to: id)
             }
+        }
+    }
+
+    /// A provider turned off takes its data with it; one turned on is fetched at once rather than at the next poll.
+    private func showEnabledProviders() {
+        let enabled = providers.filter { settingsStore.settings.placement(of: $0.id).isFetched }
+        guard enabled.map(\.id) != states.map(\.id) else { return }
+        let hasNewProvider = enabled.contains { provider in !states.contains { $0.id == provider.id } }
+        states = enabled.map { provider in
+            states.first { $0.id == provider.id } ?? ProviderState(id: provider.id, displayName: provider.displayName)
+        }
+        if hasNewProvider && pollingTask != nil {
+            Task { await refresh() }
         }
     }
 
@@ -99,7 +114,9 @@ final class UsageController: ObservableObject {
         }
     }
 
-    private func apply(_ result: Result<UsageSnapshot, any Error>, toProviderAt index: Int) {
+    private func apply(_ result: Result<UsageSnapshot, any Error>, to id: ProviderID) {
+        // Gone when the provider was turned off while its fetch was under way.
+        guard let index = states.firstIndex(where: { $0.id == id }) else { return }
         var state = states[index]
         state.isRefreshing = false
         switch result {

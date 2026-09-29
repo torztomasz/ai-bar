@@ -5,7 +5,7 @@ import SwiftUI
 /// the moment it is made, the way macOS settings do; there is no Save button.
 struct SettingsView: View {
     let settingsStore: SettingsStore
-    /// Only for the titles of the windows the badge can show.
+    /// For the providers on offer and the titles of the windows the badge can show.
     @ObservedObject var usage: UsageController
     /// Only to report a shortcut the system refused, and to stand it down while a new one is recorded.
     let hotKey: PopoverHotKey
@@ -15,20 +15,25 @@ struct SettingsView: View {
     @State private var launchAtLoginError: String?
 
     var body: some View {
-        Form {
-            Section {
-                launchAtLoginToggle
-                refreshIntervalPicker
-                badgeWindowPicker
-                openShortcutRecorder
-            } footer: {
-                Text("Version \(appVersion)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    launchAtLoginToggle
+                    refreshIntervalPicker
+                    openShortcutRecorder
+                }
+                Section("Providers") {
+                    ForEach(usage.providers, id: \.id) { provider in
+                        placementPicker(for: provider)
+                    }
+                }
             }
+            .formStyle(.grouped)
+            Text("Version \(appVersion)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 12)
         }
-        .formStyle(.grouped)
         .frame(width: 360)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear { launchesAtLogin = LaunchAtLogin.isEnabled }
@@ -36,7 +41,8 @@ struct SettingsView: View {
 
     private var launchAtLoginToggle: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Toggle("Launch at login", isOn: Binding(get: { launchesAtLogin }, set: setLaunchesAtLogin))
+            // A closure rather than the method itself, which crashes the Swift 6.2 compiler as a binding's setter.
+            Toggle("Launch at login", isOn: Binding(get: { launchesAtLogin }, set: { setLaunchesAtLogin($0) }))
             if let launchAtLoginError {
                 Text(launchAtLoginError)
                     .font(.caption)
@@ -57,21 +63,31 @@ struct SettingsView: View {
         }
     }
 
-    /// Lists what the badge would actually show: a stored choice the snapshot no longer reports is displayed as the
-    /// primary window it falls back to. Before the first snapshot only the default can be named.
-    private var badgeWindowPicker: some View {
-        let state = usage.states.first
-        let shownWindowID = state?.badgeWindow(for: settingsStore.settings.badgeWindowID)?.id
-        return Picker("Show in menu bar", selection: Binding(
-            get: { shownWindowID },
-            set: { windowID in settingsStore.update { $0.badgeWindowID = windowID } }
+    /// One choice per provider covers both where it appears and which window the menu bar shows, since a window is
+    /// only chosen for the menu bar.
+    ///
+    /// Lists what the badge would actually show: a stored window the snapshot no longer reports is displayed as the
+    /// primary window it falls back to. Until the provider has reported, only the default can be named.
+    private func placementPicker(for provider: any UsageProvider) -> some View {
+        let settings = settingsStore.settings
+        let state = usage.states.first { $0.id == provider.id }
+        let windows = state?.snapshot?.windows ?? []
+        let shownWindowID = state?.badgeWindow(for: settings.badgeWindowIDs[provider.id])?.id
+        return Picker(provider.displayName, selection: Binding(
+            get: { ProviderChoice(placement: settings.placement(of: provider.id), windowID: shownWindowID) },
+            set: { choice in settingsStore.update { choice.apply(to: &$0, for: provider.id) } }
         )) {
-            if shownWindowID == nil {
-                Text("5-hour (default)").tag(String?.none)
+            Section("Menu bar and popover") {
+                if windows.isEmpty {
+                    Text("5-hour").tag(ProviderChoice.menuBar(windowID: shownWindowID))
+                }
+                ForEach(windows) { window in
+                    Text(window.title).tag(ProviderChoice.menuBar(windowID: window.id))
+                }
             }
-            ForEach(state?.snapshot?.windows ?? []) { window in
-                Text(window.title).tag(String?.some(window.id))
-            }
+            Divider()
+            Text("Popover only").tag(ProviderChoice.popoverOnly)
+            Text("Off").tag(ProviderChoice.off)
         }
     }
 
@@ -104,6 +120,35 @@ struct SettingsView: View {
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    }
+}
+
+/// A provider's row in Settings: its placement, together with the window the menu bar shows.
+private enum ProviderChoice: Hashable {
+    /// Nil is the provider's primary window.
+    case menuBar(windowID: UsageWindow.ID?)
+    case popoverOnly
+    case off
+
+    init(placement: ProviderPlacement, windowID: UsageWindow.ID?) {
+        switch placement {
+        case .menuBar: self = .menuBar(windowID: windowID)
+        case .popoverOnly: self = .popoverOnly
+        case .off: self = .off
+        }
+    }
+
+    /// Leaving the menu bar keeps the window chosen for it, so it is back when the provider returns.
+    func apply(to settings: inout AppSettings, for provider: ProviderID) {
+        switch self {
+        case .menuBar(let windowID):
+            settings.badgeWindowIDs[provider] = windowID
+            settings.place(provider, .menuBar)
+        case .popoverOnly:
+            settings.place(provider, .popoverOnly)
+        case .off:
+            settings.place(provider, .off)
+        }
     }
 }
 

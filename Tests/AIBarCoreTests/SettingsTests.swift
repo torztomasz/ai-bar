@@ -4,9 +4,47 @@ import Testing
 
 // Method: compare against the defaults the ticket specifies, written out as literals.
 @Suite struct AppSettingsDefaults {
-    @Test func pollsEveryFiveMinutesShowsThePrimaryWindowAndHasNoShortcut() {
-        #expect(AppSettings() == AppSettings(refreshInterval: .seconds(5 * 60), badgeWindowID: nil,
+    @Test func pollsEveryFiveMinutesShowsEveryProvidersPrimaryWindowAndHasNoShortcut() {
+        #expect(AppSettings() == AppSettings(refreshInterval: .seconds(5 * 60), badgeWindowIDs: [:],
+                                             providerPlacements: [:],
                                              openPopoverShortcut: nil))
+    }
+
+    // A provider the settings have never heard of is one added by an update, which the user should get to see.
+    @Test func everyProviderStartsOutInTheMenuBar() {
+        #expect(AppSettings().placement(of: ProviderID("added-later")) == .menuBar)
+    }
+}
+
+// Method: place providers through `place`, the call the Settings window makes, and read the outcome back through
+// `placement(of:)`, the question the poller and the badge ask.
+@Suite struct ProviderPlacements {
+    @Test func placingOneProviderLeavesTheOthersInTheMenuBar() {
+        var settings = AppSettings()
+
+        settings.place(chatGPT, .popoverOnly)
+
+        #expect(settings.placement(of: chatGPT) == .popoverOnly)
+        #expect(settings.placement(of: claude) == .menuBar)
+    }
+
+    // The poller skips a provider that is off; one left to the popover still needs its data.
+    @Test func onlyAProviderThatIsOffIsNotFetched() {
+        #expect(ProviderPlacement.menuBar.isFetched)
+        #expect(ProviderPlacement.popoverOnly.isFetched)
+        #expect(!ProviderPlacement.off.isFetched)
+    }
+
+    // The menu bar is stored as no entry at all, so going back to it must leave nothing behind.
+    @Test(arguments: [ProviderPlacement.popoverOnly, .off])
+    func returningAProviderToTheMenuBarRestoresTheDefaults(from placement: ProviderPlacement) {
+        var settings = AppSettings()
+
+        settings.place(chatGPT, placement)
+        settings.place(chatGPT, .menuBar)
+
+        #expect(settings == AppSettings())
+        #expect(settings == AppSettings(providerPlacements: [chatGPT: .menuBar]))
     }
 }
 
@@ -23,11 +61,25 @@ import Testing
         withIsolatedDefaults { defaults in
             SettingsStore(defaults: defaults).update {
                 $0.refreshInterval = .seconds(10 * 60)
-                $0.badgeWindowID = "weekly_all"
+                $0.badgeWindowIDs = [claude: "weekly_all", chatGPT: "weekly"]
+                $0.place(chatGPT, .off)
+                $0.place(claude, .popoverOnly)
             }
 
             #expect(SettingsStore(defaults: defaults).settings
-                    == AppSettings(refreshInterval: .seconds(10 * 60), badgeWindowID: "weekly_all"))
+                    == AppSettings(refreshInterval: .seconds(10 * 60),
+                                   badgeWindowIDs: [claude: "weekly_all", chatGPT: "weekly"],
+                                   providerPlacements: [chatGPT: .off, claude: .popoverOnly]))
+        }
+    }
+
+    @Test func returningAProviderToTheMenuBarSurvivesARelaunch() {
+        withIsolatedDefaults { defaults in
+            let store = SettingsStore(defaults: defaults)
+            store.update { $0.place(chatGPT, .off) }
+            store.update { $0.place(chatGPT, .menuBar) }
+
+            #expect(SettingsStore(defaults: defaults).settings.placement(of: chatGPT) == .menuBar)
         }
     }
 
@@ -35,10 +87,10 @@ import Testing
     @Test func clearingTheBadgeWindowSurvivesARelaunch() {
         withIsolatedDefaults { defaults in
             let store = SettingsStore(defaults: defaults)
-            store.update { $0.badgeWindowID = "weekly_all" }
-            store.update { $0.badgeWindowID = nil }
+            store.update { $0.badgeWindowIDs[claude] = "weekly_all" }
+            store.update { $0.badgeWindowIDs[claude] = nil }
 
-            #expect(SettingsStore(defaults: defaults).settings.badgeWindowID == nil)
+            #expect(SettingsStore(defaults: defaults).settings.badgeWindowIDs.isEmpty)
         }
     }
 
@@ -74,6 +126,28 @@ import Testing
     }
 }
 
+// Method: write the badge window the way the app did while Claude was its only provider, a plain string under
+// `badgeWindowID`, then open a store as the updated app would on its first launch.
+@MainActor @Suite struct SettingsFromBeforeASecondProvider {
+    @Test func theStoredBadgeWindowBecomesClaudes() {
+        withIsolatedDefaults { defaults in
+            defaults.set("weekly_all", forKey: "badgeWindowID")
+
+            #expect(SettingsStore(defaults: defaults).settings.badgeWindowIDs == [claude: "weekly_all"])
+        }
+    }
+
+    // Otherwise the old choice would come back as soon as Claude's is cleared.
+    @Test func theOldChoiceIsNotReadAgainOnceSettingsAreSaved() {
+        withIsolatedDefaults { defaults in
+            defaults.set("weekly_all", forKey: "badgeWindowID")
+            SettingsStore(defaults: defaults).update { $0.badgeWindowIDs[claude] = nil }
+
+            #expect(SettingsStore(defaults: defaults).settings.badgeWindowIDs.isEmpty)
+        }
+    }
+}
+
 // Method: write raw values under the store's keys, as a hand edit with `defaults write` or another app version would,
 // then open a store and check it reads the defaults instead of the junk.
 @MainActor @Suite struct SettingsFromBadStoredValues {
@@ -87,11 +161,30 @@ import Testing
         }
     }
 
-    @Test func nonTextBadgeWindowFallsBackToThePrimaryWindow() {
+    @Test(arguments: ["weekly_all", 42, ["claude": 42]] as [any Sendable])
+    func unreadableBadgeWindowsFallBackToThePrimaryWindows(stored: any Sendable) {
         withIsolatedDefaults { defaults in
-            defaults.set(42, forKey: SettingsStore.Key.badgeWindowID)
+            defaults.set(stored, forKey: SettingsStore.Key.badgeWindowIDs)
 
-            #expect(SettingsStore(defaults: defaults).settings.badgeWindowID == nil)
+            #expect(SettingsStore(defaults: defaults).settings.badgeWindowIDs.isEmpty)
+        }
+    }
+
+    @Test(arguments: ["off", 42, ["chatgpt": 42], ["chatgpt": "sidebar"]] as [any Sendable])
+    func unreadablePlacementsLeaveEveryProviderInTheMenuBar(stored: any Sendable) {
+        withIsolatedDefaults { defaults in
+            defaults.set(stored, forKey: SettingsStore.Key.providerPlacements)
+
+            #expect(SettingsStore(defaults: defaults).settings == AppSettings())
+        }
+    }
+
+    // One entry from a future version must not cost the entries this version understands.
+    @Test func anUnknownPlacementDoesNotHideTheKnownOnes() {
+        withIsolatedDefaults { defaults in
+            defaults.set(["chatgpt": "sidebar", "claude": "off"], forKey: SettingsStore.Key.providerPlacements)
+
+            #expect(SettingsStore(defaults: defaults).settings == AppSettings(providerPlacements: [claude: .off]))
         }
     }
 
@@ -131,6 +224,9 @@ import Testing
         }
     }
 }
+
+private let claude = ProviderID("claude")
+private let chatGPT = ProviderID("chatgpt")
 
 @MainActor private func withIsolatedDefaults(_ body: (UserDefaults) -> Void) {
     let suiteName = "AIBarCoreTests.\(UUID().uuidString)"

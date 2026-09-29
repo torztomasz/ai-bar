@@ -3,9 +3,12 @@
 public struct AppSettings: Equatable, Sendable {
     /// One of `refreshIntervalChoices` once stored; see `supported()`.
     public var refreshInterval: Duration
-    /// The window the menu bar badge shows; nil follows the provider's primary window (see
-    /// `UsageSnapshot.window(for:)`).
-    public var badgeWindowID: String?
+    /// The window the menu bar badge shows for each provider; a provider without an entry shows its primary window
+    /// (see `UsageSnapshot.window(for:)`). Per provider because window ids are each provider's own.
+    public var badgeWindowIDs: [ProviderID: String]
+    /// Where each provider's usage appears. Stored for the exceptions only: a provider without an entry is in the
+    /// menu bar, so one added by an update starts out shown.
+    public private(set) var providerPlacements: [ProviderID: ProviderPlacement]
     /// Toggles the usage popover from any app. Off by default: every global shortcut is taken from every other app,
     /// so it is the user's to claim.
     public var openPopoverShortcut: GlobalShortcut?
@@ -14,11 +17,21 @@ public struct AppSettings: Equatable, Sendable {
     public static let refreshIntervalChoices: [Duration] = [1, 2, 5, 10, 15].map(Duration.minutes)
     public static let defaultRefreshInterval: Duration = .minutes(5)
 
-    public init(refreshInterval: Duration = defaultRefreshInterval, badgeWindowID: String? = nil,
+    public init(refreshInterval: Duration = defaultRefreshInterval, badgeWindowIDs: [ProviderID: String] = [:],
+                providerPlacements: [ProviderID: ProviderPlacement] = [:],
                 openPopoverShortcut: GlobalShortcut? = nil) {
         self.refreshInterval = refreshInterval
-        self.badgeWindowID = badgeWindowID
+        self.badgeWindowIDs = badgeWindowIDs
+        self.providerPlacements = providerPlacements.filter { $0.value != .menuBar }
         self.openPopoverShortcut = openPopoverShortcut
+    }
+
+    public func placement(of provider: ProviderID) -> ProviderPlacement {
+        providerPlacements[provider] ?? .menuBar
+    }
+
+    public mutating func place(_ provider: ProviderID, _ placement: ProviderPlacement) {
+        providerPlacements[provider] = placement == .menuBar ? nil : placement
     }
 
     /// Replaces an interval the Settings window does not offer with the default, and drops a shortcut that could
@@ -44,5 +57,19 @@ extension Duration {
     /// Rounded down.
     public var wholeMinutes: Int {
         Int(components.seconds / 60)
+    }
+}
+
+/// Where a provider's usage appears. One choice rather than a switch per place, so there is no combination that
+/// means nothing, such as hidden from the menu bar while turned off.
+public enum ProviderPlacement: String, Equatable, Sendable {
+    /// In the menu bar badge and in the popover.
+    case menuBar
+    case popoverOnly
+    /// Nowhere, and not fetched.
+    case off
+
+    public var isFetched: Bool {
+        self != .off
     }
 }
