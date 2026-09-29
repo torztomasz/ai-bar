@@ -25,7 +25,7 @@ nothing to log in to. More providers plug in behind the `UsageProvider` protocol
   passed: a fill past the cursor means usage is running ahead of time. A line underneath says how
   long you will be locked out (`Locked out for ~1h 20m`, or `~2d 19h` for a day or more, in red) or
   that the window `Lasts to reset`.
-- **Right click**, or the refresh icon in the popover, refreshes immediately; a light runs round the pill
+- **Right click**, or Refresh in the popover, refreshes immediately; a light runs round the pill
   and the icon turns while it runs, and the icon shows a checkmark once fresh data is in. The app also polls every 5 minutes and after the Mac wakes.
 - Hover the pill for a tooltip with the reset countdown and, when you are on pace to run out, the lockout.
 
@@ -39,7 +39,7 @@ the reset time yields the projected usage. Readings are stored per window under
 
 ## Settings
 
-The gear in the popover (or ⌘, while it is open) opens Settings: launch at login, how often to refresh
+Settings… in the popover (or ⌘, while it is open) opens Settings: launch at login, how often to refresh
 (1 to 15 minutes, default 5) and an optional shortcut that opens the popover from
 any app (none by default). Each provider has one choice: which of its windows the pill shows, "Popover only", which keeps it
 out of the menu bar, or "Off", which also stops fetching it. With no provider in the menu bar the item

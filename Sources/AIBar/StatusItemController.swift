@@ -9,7 +9,7 @@ final class StatusItemController: NSObject {
     var onRefreshRequested: () -> Void = {}
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let popover = NSPopover()
+    private let popover: PopoverPanel
     private let settingsStore: SettingsStore
     private var shownStates: [ProviderState] = []
     private var tooltipClock: Timer?
@@ -17,12 +17,8 @@ final class StatusItemController: NSObject {
 
     init(popoverContent: some View, settingsStore: SettingsStore) {
         self.settingsStore = settingsStore
+        popover = PopoverPanel(content: popoverContent)
         super.init()
-        popover.behavior = .transient
-        let hostingController = NSHostingController(rootView: popoverContent)
-        // Lets the popover resize when its content changes, e.g. from an error message to the window rows.
-        hostingController.sizingOptions = .preferredContentSize
-        popover.contentViewController = hostingController
         configureButton()
         startTooltipClock()
         refitBadgeWhenDisplaysChange()
@@ -42,7 +38,7 @@ final class StatusItemController: NSObject {
 
     /// Makes way for the Settings window, which the popover would otherwise cover.
     func closePopover() {
-        popover.performClose(nil)
+        popover.close()
     }
 
     /// For the global shortcut, which has no button press of its own to anchor to.
@@ -107,13 +103,10 @@ final class StatusItemController: NSObject {
     }
 
     private func togglePopover(from button: NSStatusBarButton) {
-        if popover.isShown {
-            popover.performClose(button)
-        } else {
-            // An accessory app is not active by default; without activating, the transient popover
-            // would not receive the outside click that should dismiss it.
-            NSApp.activate()
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        if popover.isVisible {
+            popover.close()
+        } else if !popover.wasJustClosed {
+            popover.show(below: button)
         }
     }
 }

@@ -1,8 +1,8 @@
 import AIBarCore
 import SwiftUI
 
-/// Popover shown on left click: every provider's windows with reset times and forecasts, and a footer to refresh,
-/// open Settings or quit.
+/// Popover shown on left click, laid out like the system's own menu bar extras: every provider's windows with reset
+/// times and forecasts, each provider its own section, then menu rows to refresh, open Settings or quit.
 ///
 /// Motion is brief and only marks a change of state: the refresh icon turns while data is on its way and confirms
 /// its arrival, and values that change settle into place. With Reduce Motion on, movement is dropped and only
@@ -12,58 +12,119 @@ struct UsagePopoverView: View {
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
+    /// About the width of the system's Sound and Wi-Fi windows.
+    private static let width: CGFloat = 300
+
     var body: some View {
         // Re-evaluated periodically so "resets in", "Updated … ago" and the time cursors keep moving while the
         // popover is open.
         TimelineView(.periodic(from: .now, by: 15)) { context in
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(controller.states) { state in
+                    if state.id != controller.states.first?.id { MenuSeparator() }
                     ProviderSection(state: state, now: context.date)
+                        .padding(.horizontal, MenuMetrics.contentInset)
+                        .padding(.vertical, 8)
                 }
                 if controller.states.isEmpty {
                     Text(UsageText.noProviders)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, MenuMetrics.contentInset)
+                        .padding(.vertical, 8)
                 }
-                footer(now: context.date)
-                    .padding(.top, 4)
+                MenuSeparator()
+                actions(now: context.date)
             }
-            .padding(16)
-            .frame(width: 280)
+            .padding(.vertical, 6)
+            .frame(width: Self.width)
         }
     }
 
-    private func footer(now: Date) -> some View {
-        HStack(spacing: 10) {
-            let updated = UsageText.updated(controller.oldestRefresh, now: now)
-            Text(updated)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .contentTransition(.opacity)
-                .animation(.easeOut(duration: 0.2), value: updated)
-            Spacer()
-            RefreshButton(isRefreshing: controller.isRefreshing, hasFailed: controller.hasFailedRefresh) {
+    private func actions(now: Date) -> some View {
+        VStack(spacing: 0) {
+            RefreshRow(isRefreshing: controller.isRefreshing, hasFailed: controller.hasFailedRefresh,
+                       updated: UsageText.updated(controller.oldestRefresh, now: now)) {
                 Task { await controller.refresh() }
             }
-            // ⌘, is the standard Settings shortcut; an accessory app has no menu bar to carry it, so the button does.
+            // ⌘, is the standard Settings shortcut; an accessory app has no menu bar to carry it, so the row does.
             Button(action: onOpenSettings) {
-                FooterIcon(systemName: "gearshape", label: "Settings")
+                MenuRowLabel(title: "Settings…", trailing: "⌘,") { Image(systemName: "gearshape") }
             }
-            .buttonStyle(.borderless)
-            .help("Settings")
+            .buttonStyle(MenuRowStyle())
             .keyboardShortcut(",", modifiers: .command)
-            Menu {
-                Button("Quit AI Bar", action: onQuit)
-                    .keyboardShortcut("q", modifiers: .command)
-            } label: {
-                FooterIcon(systemName: "ellipsis.circle", label: "More")
+            Button(action: onQuit) {
+                MenuRowLabel(title: "Quit AI Bar", trailing: "⌘Q") { Image(systemName: "power") }
             }
-            // Plain keeps the label at the size of its neighbours; borderless menu styles shrink it.
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("More")
+            .buttonStyle(MenuRowStyle())
+            .keyboardShortcut("q", modifiers: .command)
+        }
+    }
+}
+
+/// The system menu's spacing, so the popover's edges line up the way a menu bar extra's do.
+private enum MenuMetrics {
+    /// From the glass edge to text.
+    static let contentInset: CGFloat = 14
+    /// From the glass edge to a row's highlight; text inside it still lines up with `contentInset`.
+    static let rowInset: CGFloat = 5
+    /// Concentric with the panel's corners at `rowInset`.
+    static let rowCornerRadius = PopoverPanel.cornerRadius - rowInset
+}
+
+/// A hairline between sections, inset from the glass edges as a menu's separators are.
+private struct MenuSeparator: View {
+    var body: some View {
+        Divider()
+            .padding(.horizontal, MenuMetrics.contentInset - 4)
+            .padding(.vertical, 5)
+    }
+}
+
+/// A menu item's look: highlighted under the pointer, and a little more while pressed, to show it is live.
+private struct MenuRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        MenuRow(configuration: configuration)
+    }
+
+    private struct MenuRow: View {
+        let configuration: Configuration
+        @State private var isHovered = false
+
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, MenuMetrics.contentInset - MenuMetrics.rowInset)
+                .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+                .background(highlight, in: RoundedRectangle(cornerRadius: MenuMetrics.rowCornerRadius,
+                                                            style: .continuous))
+                .contentShape(Rectangle())
+                .onHover { isHovered = $0 }
+                .padding(.horizontal, MenuMetrics.rowInset)
+        }
+
+        private var highlight: Color {
+            if configuration.isPressed { return .primary.opacity(0.16) }
+            return isHovered ? .primary.opacity(0.1) : .clear
+        }
+    }
+}
+
+/// Icon, title, and a secondary note on the right, e.g. the row's shortcut.
+private struct MenuRowLabel<Icon: View>: View {
+    let title: String
+    let trailing: String
+    @ViewBuilder let icon: Icon
+
+    var body: some View {
+        HStack(spacing: 8) {
+            icon
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            Text(title)
+            Spacer(minLength: 12)
+            Text(trailing)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -77,7 +138,7 @@ private struct ProviderSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(state.displayName).font(.headline)
+            Text(state.displayName).font(.headline.weight(.bold))
             if let error = state.lastError {
                 Text(error.localizedDescription)
                     .foregroundStyle(.secondary)
@@ -216,13 +277,14 @@ private struct UsageBarView: View {
     }
 }
 
-/// Turns while a refresh runs and settles upright when it ends (see `RefreshSpin`), then briefly turns into a
-/// checkmark if the refresh succeeded, so the user learns it worked without reading the timestamp. A failure gets no
-/// checkmark: its message already shows above. With Reduce Motion on the icon stays still and dims instead of turning,
-/// and the checkmark fades in and out rather than morphing.
-private struct RefreshButton: View {
+/// Refreshes every provider and says when the data is from. Its icon turns while a refresh runs and settles upright
+/// when it ends (see `RefreshSpin`), then briefly turns into a checkmark if the refresh succeeded, so the user learns
+/// it worked without reading the timestamp. A failure gets no checkmark: its message already shows above. With Reduce
+/// Motion on the icon stays still and dims instead of turning, and the checkmark fades in and out rather than morphing.
+private struct RefreshRow: View {
     let isRefreshing: Bool
     let hasFailed: Bool
+    let updated: String
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -242,19 +304,11 @@ private struct RefreshButton: View {
 
     var body: some View {
         Button(action: action) {
-            TimelineView(.animation(paused: !spin.isMoving(at: .now))) { context in
-                FooterIcon(systemName: showsCheck ? "checkmark" : "arrow.clockwise", label: "Refresh",
-                           emphasis: showsCheck ? .green : nil)
-                    .contentTransition(reduceMotion ? .opacity : .symbolEffect(.replace.downUp))
-                    .rotationEffect(.degrees(spin.degrees(at: context.date)))
-            }
+            MenuRowLabel(title: "Refresh", trailing: updated) { icon }
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.2), value: updated)
         }
-        .buttonStyle(.borderless)
-        .help("Refresh")
-        // Scoped to the opacity, so the fade can never animate anything else in the button.
-        .animation(.easeOut(duration: 0.15)) {
-            $0.opacity(reduceMotion && isRefreshing ? Self.dimmedOpacity : 1)
-        }
+        .buttonStyle(MenuRowStyle())
         .onChange(of: isRefreshing, initial: true) { followRefreshing() }
         .onChange(of: isRefreshing) { wasRefreshing, refreshing in
             if refreshing {
@@ -276,6 +330,19 @@ private struct RefreshButton: View {
         }
     }
 
+    private var icon: some View {
+        TimelineView(.animation(paused: !spin.isMoving(at: .now))) { context in
+            Image(systemName: showsCheck ? "checkmark" : "arrow.clockwise")
+                .foregroundStyle(showsCheck ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                .contentTransition(reduceMotion ? .opacity : .symbolEffect(.replace.downUp))
+                .rotationEffect(.degrees(spin.degrees(at: context.date)))
+        }
+        // Scoped to the opacity, so the fade can never animate anything else in the row.
+        .animation(.easeOut(duration: 0.15)) {
+            $0.opacity(reduceMotion && isRefreshing ? Self.dimmedOpacity : 1)
+        }
+    }
+
     private func followRefreshing() {
         if isRefreshing && !reduceMotion {
             spin.start(at: .now)
@@ -290,32 +357,6 @@ private struct RefreshButton: View {
         withAnimation(Self.checkArrival) { showsCheck = true }
         guard (try? await Task.sleep(for: Self.checkHold)) != nil else { return }
         withAnimation(Self.checkDeparture) { showsCheck = false }
-    }
-}
-
-/// Footer icons stay secondary so the data above them leads, and brighten under the pointer to show they are live.
-/// `label` is what VoiceOver reads instead of the symbol's name. `emphasis` replaces both colours for a moment that
-/// must stand out.
-private struct FooterIcon: View {
-    let systemName: String
-    let label: String
-    var emphasis: Color?
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 16))
-            // A menu label is otherwise redrawn as a template in the primary colour, whatever its foreground style.
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(foreground)
-            .onHover { isHovered = $0 }
-            .accessibilityLabel(label)
-    }
-
-    private var foreground: AnyShapeStyle {
-        if let emphasis { return AnyShapeStyle(emphasis) }
-        return isHovered ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
     }
 }
 
