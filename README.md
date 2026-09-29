@@ -6,7 +6,7 @@ you are on pace to run out before the window resets.
 It shows Claude and ChatGPT. It reuses the sessions Claude Code and Codex already have, so there is
 nothing to log in to. More providers plug in behind the `UsageProvider` protocol.
 
-<img src="docs/screenshots/popover.png" alt="The menu bar reading and the popover, annotated: usage so far, projected usage at reset, how much of the window has passed, and how long you would be locked out" width="750">
+<img src="docs/screenshots/popover.png" alt="The menu bar reading and the popover with Claude and ChatGPT, annotated: usage so far, projected usage at reset, how much of the window has passed, and how long you would be locked out" width="750">
 
 > **A personal project.** I built AI Bar for myself, and it is opinionated to match how I work: the
 > providers I use, the windows I care about, the defaults I like. It is public in case it is useful to
