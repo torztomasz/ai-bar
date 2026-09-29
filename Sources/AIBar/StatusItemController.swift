@@ -20,6 +20,7 @@ final class StatusItemController: NSObject {
         popover = PopoverPanel(content: popoverContent)
         super.init()
         configureButton()
+        markItemDeselectedWhenPopoverCloses()
         startTooltipClock()
         refitBadgeWhenDisplaysChange()
         render()
@@ -88,6 +89,13 @@ final class StatusItemController: NSObject {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
+    private func markItemDeselectedWhenPopoverCloses() {
+        popover.onClose = { [weak self] in
+            guard let self else { return }
+            statusItem.markDeselected(presenting: popover)
+        }
+    }
+
     @objc private func handleClick(_ sender: NSStatusBarButton) {
         if isSecondaryClick(NSApp.currentEvent) {
             onRefreshRequested()
@@ -106,6 +114,7 @@ final class StatusItemController: NSObject {
         if popover.isVisible {
             popover.close()
         } else if !popover.wasJustClosed {
+            statusItem.markSelected(presenting: popover) { [weak self] in self?.popover.close() }
             popover.show(below: button)
         }
     }
@@ -300,6 +309,39 @@ extension NSAppearance {
         var resolved = color.cgColor
         performAsCurrentDrawingAppearance { resolved = color.cgColor }
         return resolved
+    }
+}
+
+/// The menu bar draws a selected item with a capsule behind it for as long as its menu or window is open. On macOS 26
+/// the capsule follows only what the item reports as presented, which AppKit does for `NSMenu` and `NSPopover`
+/// but offers no public way to do for a window of our own; the button's highlight, the public route, no longer
+/// draws anything there. So the panel is reported through the same private calls `NSPopover` makes, and the
+/// highlight is kept for systems without them.
+@MainActor
+extension NSStatusItem {
+    private static let willPresent = Selector(("_willPresentContent:cancellationHandler:"))
+    /// Despite its name, `NSPopover` calls this as it closes, and it is what ends the selection.
+    private static let didPresent = Selector(("_didPresentContent:"))
+
+    /// `onCancel` runs when the menu bar ends the selection itself, e.g. as the user moves to another item.
+    fileprivate func markSelected(presenting content: NSWindow, onCancel: @escaping @MainActor @Sendable () -> Void) {
+        guard responds(to: Self.willPresent) else {
+            DispatchQueue.main.async { self.button?.highlight(true) }
+            return
+        }
+        typealias WillPresent = @convention(c) (NSStatusItem, Selector, NSWindow, AnyObject) -> Void
+        let cancel: @convention(block) () -> Void = { Task { @MainActor in onCancel() } }
+        unsafeBitCast(method(for: Self.willPresent), to: WillPresent.self)(self, Self.willPresent, content,
+                                                                           cancel as AnyObject)
+    }
+
+    fileprivate func markDeselected(presenting content: NSWindow) {
+        guard responds(to: Self.didPresent) else {
+            button?.highlight(false)
+            return
+        }
+        typealias DidPresent = @convention(c) (NSStatusItem, Selector, NSWindow) -> Void
+        unsafeBitCast(method(for: Self.didPresent), to: DidPresent.self)(self, Self.didPresent, content)
     }
 }
 

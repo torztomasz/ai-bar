@@ -8,6 +8,8 @@ import SwiftUI
 /// It closes the way a menu does: on a click anywhere outside it, on Escape, or when the app loses focus.
 @MainActor
 final class PopoverPanel: NSPanel {
+    var onClose: () -> Void = {}
+
     private let hostingController: NSHostingController<GlassSurface<AnyView>>
     private var sizeObservation: NSKeyValueObservation?
     private var outsideClickMonitor: Any?
@@ -54,6 +56,7 @@ final class PopoverPanel: NSPanel {
         stopWatchingOutsideClicks()
         super.close()
         closedAt = Date()
+        onClose()
     }
 
     /// Keeps the top edge fixed whatever size AppKit asks for, so content changes never lift the panel off the
