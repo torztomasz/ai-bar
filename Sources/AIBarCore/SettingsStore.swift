@@ -15,11 +15,14 @@ public final class SettingsStore {
 
     @ObservationIgnored private let defaults: UserDefaults
 
-    /// The persisted form is primitive (whole minutes, a plain string, a key code with named modifiers) so it stays
+    /// The persisted form is primitive (whole minutes, plain strings, a key code with named modifiers) so it stays
     /// readable with `defaults read`.
     enum Key {
         static let refreshIntervalMinutes = "refreshIntervalMinutes"
-        static let badgeWindowID = "badgeWindowID"
+        static let badgeWindowIDs = "badgeWindowIDs"
+        /// From when Claude was the only provider; read as Claude's choice until the first write replaces it.
+        static let claudeOnlyBadgeWindowID = "badgeWindowID"
+        static let disabledProviders = "disabledProviders"
         static let openPopoverShortcut = "openPopoverShortcut"
         static let shortcutKeyCode = "keyCode"
         static let shortcutModifiers = "modifiers"
@@ -45,9 +48,19 @@ public final class SettingsStore {
         return AppSettings(
             refreshInterval: AppSettings.refreshIntervalChoices.first { $0.wholeMinutes == storedMinutes }
                 ?? AppSettings.defaultRefreshInterval,
-            badgeWindowID: defaults.object(forKey: Key.badgeWindowID) as? String,
+            badgeWindowIDs: readBadgeWindowIDs(from: defaults),
+            disabledProviders: Set((defaults.object(forKey: Key.disabledProviders) as? [String] ?? [])
+                .map(ProviderID.init(rawValue:))),
             openPopoverShortcut: readShortcut(defaults.object(forKey: Key.openPopoverShortcut))
         ).supported()
+    }
+
+    private static func readBadgeWindowIDs(from defaults: UserDefaults) -> [ProviderID: String] {
+        if let stored = defaults.object(forKey: Key.badgeWindowIDs) as? [String: String] {
+            return Dictionary(uniqueKeysWithValues: stored.map { (ProviderID($0.key), $0.value) })
+        }
+        guard let claudeWindowID = defaults.object(forKey: Key.claudeOnlyBadgeWindowID) as? String else { return [:] }
+        return [ClaudeUsageProvider.providerID: claudeWindowID]
     }
 
     private static func readShortcut(_ stored: Any?) -> GlobalShortcut? {
@@ -61,7 +74,10 @@ public final class SettingsStore {
 
     private static func write(_ settings: AppSettings, to defaults: UserDefaults) {
         defaults.set(settings.refreshInterval.wholeMinutes, forKey: Key.refreshIntervalMinutes)
-        defaults.set(settings.badgeWindowID, forKey: Key.badgeWindowID)
+        defaults.set(Dictionary(uniqueKeysWithValues: settings.badgeWindowIDs.map { ($0.key.rawValue, $0.value) }),
+                     forKey: Key.badgeWindowIDs)
+        defaults.removeObject(forKey: Key.claudeOnlyBadgeWindowID)
+        defaults.set(settings.disabledProviders.map(\.rawValue).sorted(), forKey: Key.disabledProviders)
         defaults.set(settings.openPopoverShortcut.map { shortcut -> [String: Any] in
             [Key.shortcutKeyCode: Int(shortcut.keyCode), Key.shortcutModifiers: shortcut.modifiers.storedNames]
         }, forKey: Key.openPopoverShortcut)

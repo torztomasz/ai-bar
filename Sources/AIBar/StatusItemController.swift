@@ -11,7 +11,7 @@ final class StatusItemController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private let settingsStore: SettingsStore
-    private var shownState: ProviderState?
+    private var shownStates: [ProviderState] = []
     private var tooltipClock: Timer?
     private lazy var refreshTracer = PillTracer(button: statusItem.button)
 
@@ -29,11 +29,11 @@ final class StatusItemController: NSObject {
         render()
     }
 
-    /// Shows `state` in the badge; nil before any provider has reported.
-    func show(_ state: ProviderState?) {
-        shownState = state
+    /// Shows one reading per state in the badge, in the order given.
+    func show(_ states: [ProviderState]) {
+        shownStates = states
         render()
-        refreshTracer.follow(isRefreshing: state?.isRefreshing ?? false)
+        refreshTracer.follow(isRefreshing: states.contains(where: \.isRefreshing))
     }
 
     func settingsDidChange() {
@@ -51,18 +51,26 @@ final class StatusItemController: NSObject {
         togglePopover(from: button)
     }
 
-    /// Text and tooltip both describe the window chosen in settings.
+    /// Badge and tooltip both describe, for each provider, the window chosen for it in settings.
     private func render() {
-        let window = shownState?.badgeWindow(for: settingsStore.settings.badgeWindowID)
-        let forecast = window.flatMap { shownState?.forecasts[$0.id] }
-        let text = UsageText.badge(window: window, hasError: shownState?.lastError != nil)
-        let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))
-        statusItem.button?.image = BadgeRenderer.image(text: text, height: height)
-        refreshTracer.fit()
-        statusItem.button?.toolTip = shownState.map { state in
-            UsageText.tooltip(providerName: state.displayName, window: window, forecast: forecast,
-                              errorDescription: state.lastError?.localizedDescription, now: Date())
+        let readings = shownStates.map { state in
+            BadgeReading(state: state, window: state.badgeWindow(for: settingsStore.settings.badgeWindowIDs[state.id]))
         }
+        let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))
+        statusItem.button?.image = BadgeRenderer.image(rows: badgeRows(for: readings), height: height)
+        refreshTracer.fit()
+        statusItem.button?.toolTip = readings.isEmpty
+            ? UsageText.noProviders
+            : readings.map { $0.tooltip(now: Date()) }.joined(separator: "\n")
+    }
+
+    /// With every provider turned off the placeholder keeps the item, and with it the way to Settings, in the
+    /// menu bar.
+    private func badgeRows(for readings: [BadgeReading]) -> [BadgeRenderer.Row] {
+        guard !readings.isEmpty else {
+            return [BadgeRenderer.Row(mark: nil, text: UsageText.badge(window: nil, hasError: false))]
+        }
+        return readings.map { BadgeRenderer.Row(mark: ProviderMark.image(for: $0.state.id), text: $0.text) }
     }
 
     /// The tooltip counts down to the reset in minutes, but data only changes every poll, so it is redrawn on
@@ -113,6 +121,22 @@ final class StatusItemController: NSObject {
             NSApp.activate()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
+    }
+}
+
+/// One provider's part of the badge: the window chosen for it and what the badge and tooltip say about it.
+private struct BadgeReading {
+    let state: ProviderState
+    let window: UsageWindow?
+
+    var text: String {
+        UsageText.badge(window: window, hasError: state.lastError != nil)
+    }
+
+    func tooltip(now: Date) -> String {
+        UsageText.tooltip(providerName: state.displayName, window: window,
+                          forecast: window.flatMap { state.forecasts[$0.id] },
+                          errorDescription: state.lastError?.localizedDescription, now: now)
     }
 }
 

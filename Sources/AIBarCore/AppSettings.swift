@@ -3,9 +3,11 @@
 public struct AppSettings: Equatable, Sendable {
     /// One of `refreshIntervalChoices` once stored; see `supported()`.
     public var refreshInterval: Duration
-    /// The window the menu bar badge shows; nil follows the provider's primary window (see
-    /// `UsageSnapshot.window(for:)`).
-    public var badgeWindowID: String?
+    /// The window the menu bar badge shows for each provider; a provider without an entry shows its primary window
+    /// (see `UsageSnapshot.window(for:)`). Per provider because window ids are each provider's own.
+    public var badgeWindowIDs: [ProviderID: String]
+    /// Providers the user turned off. Stored as the exceptions, so a provider added by an update starts out shown.
+    public var disabledProviders: Set<ProviderID>
     /// Toggles the usage popover from any app. Off by default: every global shortcut is taken from every other app,
     /// so it is the user's to claim.
     public var openPopoverShortcut: GlobalShortcut?
@@ -14,11 +16,24 @@ public struct AppSettings: Equatable, Sendable {
     public static let refreshIntervalChoices: [Duration] = [1, 2, 5, 10, 15].map(Duration.minutes)
     public static let defaultRefreshInterval: Duration = .minutes(5)
 
-    public init(refreshInterval: Duration = defaultRefreshInterval, badgeWindowID: String? = nil,
-                openPopoverShortcut: GlobalShortcut? = nil) {
+    public init(refreshInterval: Duration = defaultRefreshInterval, badgeWindowIDs: [ProviderID: String] = [:],
+                disabledProviders: Set<ProviderID> = [], openPopoverShortcut: GlobalShortcut? = nil) {
         self.refreshInterval = refreshInterval
-        self.badgeWindowID = badgeWindowID
+        self.badgeWindowIDs = badgeWindowIDs
+        self.disabledProviders = disabledProviders
         self.openPopoverShortcut = openPopoverShortcut
+    }
+
+    public func isEnabled(_ provider: ProviderID) -> Bool {
+        !disabledProviders.contains(provider)
+    }
+
+    public mutating func setEnabled(_ enabled: Bool, for provider: ProviderID) {
+        if enabled {
+            disabledProviders.remove(provider)
+        } else {
+            disabledProviders.insert(provider)
+        }
     }
 
     /// Replaces an interval the Settings window does not offer with the default, and drops a shortcut that could
