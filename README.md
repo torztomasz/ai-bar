@@ -6,10 +6,7 @@ you are on pace to run out before the window resets.
 The first provider is Claude. It reuses the session Claude Code already has, so there is nothing to
 log in to. More providers plug in behind the `UsageProvider` protocol.
 
-<p>
-  <img src="docs/screenshots/popover.png" alt="The popover with the 5-hour, weekly and weekly per-model windows" width="306">
-  <img src="docs/screenshots/settings.png" alt="The Settings window" width="360">
-</p>
+<img src="docs/screenshots/popover.png" alt="The menu bar reading and the popover, annotated: usage so far, projected usage at reset, how much of the window has passed, and how long you would be locked out" width="750">
 
 > **A personal project.** I built AI Bar for myself, and it is opinionated to match how I work: one
 > provider I use, the windows I care about, the defaults I like. It is public in case it is useful to
