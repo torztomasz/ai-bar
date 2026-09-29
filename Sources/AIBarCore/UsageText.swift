@@ -34,6 +34,9 @@ public enum UsageText {
     /// Shown where usage would be, when the user has turned every provider off.
     public static let noProviders = "Every provider is turned off. Turn one on in Settings."
 
+    /// The tooltip of a badge no provider is shown in.
+    public static let emptyBadge = "AI Bar: no provider is shown in the menu bar"
+
     /// Minutes precision, rounded down so the countdown never promises more time than is left.
     public static func resetsIn(_ resetsAt: Date?, now: Date) -> String {
         guard let resetsAt else { return "—" }

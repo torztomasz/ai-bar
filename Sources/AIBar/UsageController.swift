@@ -24,7 +24,7 @@ final class UsageController: ObservableObject {
     init(providers: [any UsageProvider], settingsStore: SettingsStore) {
         self.providers = providers
         self.settingsStore = settingsStore
-        states = providers.filter { settingsStore.settings.isEnabled($0.id) }
+        states = providers.filter { settingsStore.settings.placement(of: $0.id).isFetched }
             .map { ProviderState(id: $0.id, displayName: $0.displayName) }
     }
 
@@ -89,7 +89,7 @@ final class UsageController: ObservableObject {
 
     /// A provider turned off takes its data with it; one turned on is fetched at once rather than at the next poll.
     private func showEnabledProviders() {
-        let enabled = providers.filter { settingsStore.settings.isEnabled($0.id) }
+        let enabled = providers.filter { settingsStore.settings.placement(of: $0.id).isFetched }
         guard enabled.map(\.id) != states.map(\.id) else { return }
         let hasNewProvider = enabled.contains { provider in !states.contains { $0.id == provider.id } }
         states = enabled.map { provider in

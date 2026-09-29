@@ -53,30 +53,39 @@ import Testing
 
 // Method: lay out badges of the two heights `BadgeSize` produces (24 pt, and 20 pt on a short menu bar) and check
 // the rows against the badge's edges. A row of digits is as tall as the font's capital letters, about 0.72 of the
-// font size for the system font, which is what has to clear the neighbouring row and the edges.
+// font size for the system font, which is what has to clear the neighbouring row and the edges. The edges are where
+// the refresh light runs, 1.5 pt wide at its thinnest.
 @Suite struct BadgeLayoutForProviders {
     @Test func aSingleReadingIsCentredAtFullSizeWithoutAMark() {
         #expect(BadgeLayout(rowCount: 1, height: 24)
                 == BadgeLayout(fontSize: 12, markSize: nil, rowMidlines: [12]))
     }
 
+    // The outline the refresh light follows is a capsule only while the corners are empty.
+    @Test func onlySeveralReadingsCountAsStacked() {
+        #expect(!BadgeLayout(rowCount: 1, height: 24).isStacked)
+        #expect(BadgeLayout(rowCount: 2, height: 24).isStacked)
+    }
+
     @Test func twoReadingsAreStackedAroundTheMiddleInSmallerType() {
         #expect(BadgeLayout(rowCount: 2, height: 24)
-                == BadgeLayout(fontSize: 9.5, markSize: 8.5, rowMidlines: [17.5, 6.5]))
+                == BadgeLayout(fontSize: 9.5, markSize: 8, rowMidlines: [16.75, 7.25]))
     }
 
     @Test func rowsMoveCloserTogetherInAShortBadge() {
-        #expect(BadgeLayout(rowCount: 2, height: 20).rowMidlines == [15, 5])
+        #expect(BadgeLayout(rowCount: 2, height: 20).rowMidlines == [14.5, 5.5])
     }
 
     @Test(arguments: [20.0, 24.0])
-    func stackedDigitsAndMarksStayInsideTheBadgeAndClearOfEachOther(height: Double) throws {
+    func stackedDigitsAndMarksStayClearOfTheRefreshLightAndOfEachOther(height: Double) throws {
         let layout = BadgeLayout(rowCount: 2, height: height)
         let rowHeight = max(layout.fontSize * 0.72, try #require(layout.markSize))
         let (top, bottom) = (layout.rowMidlines[0], layout.rowMidlines[1])
 
-        #expect(top + rowHeight / 2 <= height)
-        #expect(bottom - rowHeight / 2 >= 0)
+        let lightWidth = 1.5
+
+        #expect(top + rowHeight / 2 <= height - lightWidth)
+        #expect(bottom - rowHeight / 2 >= lightWidth)
         #expect(top - bottom >= rowHeight + 1)
     }
 }

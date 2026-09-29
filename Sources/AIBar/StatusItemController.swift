@@ -53,24 +53,18 @@ final class StatusItemController: NSObject {
 
     /// Badge and tooltip both describe, for each provider, the window chosen for it in settings.
     private func render() {
-        let readings = shownStates.map { state in
+        let readings = shownStates.filter { settingsStore.settings.placement(of: $0.id) == .menuBar }.map { state in
             BadgeReading(state: state, window: state.badgeWindow(for: settingsStore.settings.badgeWindowIDs[state.id]))
         }
         let height = BadgeSize.height(menuBarHeights: NSScreen.screens.map(\.menuBarHeight))
-        statusItem.button?.image = BadgeRenderer.image(rows: badgeRows(for: readings), height: height)
-        refreshTracer.fit()
+        let rows = readings.map { BadgeRenderer.Row(mark: ProviderMark.image(for: $0.state.id), text: $0.text) }
+        statusItem.button?.image = rows.isEmpty
+            ? BadgeRenderer.placeholder(height: height)
+            : BadgeRenderer.image(rows: rows, height: height)
+        refreshTracer.fit(around: BadgeLayout(rowCount: rows.count, height: height))
         statusItem.button?.toolTip = readings.isEmpty
-            ? UsageText.noProviders
+            ? UsageText.emptyBadge
             : readings.map { $0.tooltip(now: Date()) }.joined(separator: "\n")
-    }
-
-    /// With every provider turned off the placeholder keeps the item, and with it the way to Settings, in the
-    /// menu bar.
-    private func badgeRows(for readings: [BadgeReading]) -> [BadgeRenderer.Row] {
-        guard !readings.isEmpty else {
-            return [BadgeRenderer.Row(mark: nil, text: UsageText.badge(window: nil, hasError: false))]
-        }
-        return readings.map { BadgeRenderer.Row(mark: ProviderMark.image(for: $0.state.id), text: $0.text) }
     }
 
     /// The tooltip counts down to the reset in minutes, but data only changes every poll, so it is redrawn on
@@ -150,8 +144,13 @@ private final class PillTracer: NSObject {
     private var tracer = RefreshTracer()
     private var isRefreshing = false
     private var displayLink: CADisplayLink?
-    /// The capsule the path was last built for, so it is only rebuilt when the badge changes shape.
-    private var outlinedRect: CGRect?
+    /// The outline the path was last built for, so it is only rebuilt when the badge changes shape.
+    private var drawnOutline: Outline?
+
+    private struct Outline: Equatable {
+        let rect: CGRect
+        let cornerRadius: CGFloat
+    }
 
     /// Thin enough to leave the reading legible at 24 pt.
     private static let lineWidthPerPointOfHeight: CGFloat = 0.08
@@ -185,31 +184,43 @@ private final class PillTracer: NSObject {
         draw(at: now)
     }
 
-    /// Called after every badge redraw: the capsule widens and narrows with its text, and the light takes the
+    /// Called after every badge redraw: the outline widens and narrows with its text, and the light takes the
     /// menu bar's text colour, so it matches the reading.
-    func fit() {
+    func fit(around layout: BadgeLayout) {
         guard let button, let cell = button.cell else { return }
-        let rect = capsule(around: cell.imageRect(forBounds: button.bounds), in: button.bounds)
+        let image = cell.imageRect(forBounds: button.bounds)
+        let outline = layout.isStacked ? box(around: image, in: button.bounds)
+                                       : capsule(around: image, in: button.bounds)
+        let rect = outline.rect
         let color = button.effectiveAppearance.resolved(.labelColor)
         withoutImplicitAnimation {
             light.strokeColor = color
             light.shadowColor = color
-            guard rect != outlinedRect else { return }
-            outlinedRect = rect
+            guard outline != drawnOutline else { return }
+            drawnOutline = outline
             let lineWidth = max(rect.height * Self.lineWidthPerPointOfHeight, Self.minimumLineWidth)
             light.frame = rect
             light.lineWidth = lineWidth
             light.shadowRadius = lineWidth * 0.6
             light.path = doubledOutline(of: CGRect(origin: .zero, size: rect.size).insetBy(dx: lineWidth / 2,
                                                                                            dy: lineWidth / 2),
+                                        cornerRadius: outline.cornerRadius - lineWidth / 2,
                                         topAtMinY: button.isFlipped)
         }
     }
 
     /// The image is only as wide as its text, so a capsule that tight would run through the digits; the button's own
     /// spacing either side gives the light room to pass round them.
-    private func capsule(around image: CGRect, in bounds: CGRect) -> CGRect {
-        CGRect(x: bounds.minX, y: image.minY, width: bounds.width, height: image.height)
+    private func capsule(around image: CGRect, in bounds: CGRect) -> Outline {
+        Outline(rect: CGRect(x: bounds.minX, y: image.minY, width: bounds.width, height: image.height),
+                cornerRadius: image.height / 2)
+    }
+
+    /// Stacked readings fill the image's corners, which a capsule's round ends would run through. Corners no wider
+    /// than the button's spacing turn before they reach the image, and the button's full height gives the light
+    /// the room above and below that a short menu bar's image does not have.
+    private func box(around image: CGRect, in bounds: CGRect) -> Outline {
+        Outline(rect: bounds, cornerRadius: min(image.minX - bounds.minX, bounds.height / 2))
     }
 
     /// Linked to the button's display, so the light moves in step with the screen it is on, including while a
@@ -267,13 +278,13 @@ private final class PillTracer: NSObject {
     }
 }
 
-/// The capsule's outline twice over, clockwise from the middle of its top edge, so the light sets off and settles
+/// The rounded outline twice over, clockwise from the middle of its top edge, so the light sets off and settles
 /// at the top, where the eye expects a loop to begin. Built from corner tangents, which trace the same way on
 /// screen whether or not the button's coordinates are flipped.
-private func doubledOutline(of rect: CGRect, topAtMinY: Bool) -> CGPath {
+private func doubledOutline(of rect: CGRect, cornerRadius: CGFloat, topAtMinY: Bool) -> CGPath {
     let top = topAtMinY ? rect.minY : rect.maxY
     let bottom = topAtMinY ? rect.maxY : rect.minY
-    let radius = rect.height / 2
+    let radius = min(cornerRadius, rect.height / 2, rect.width / 2)
     let path = CGMutablePath()
     path.move(to: CGPoint(x: rect.midX, y: top))
     for _ in 0..<2 {

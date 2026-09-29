@@ -22,7 +22,7 @@ public final class SettingsStore {
         static let badgeWindowIDs = "badgeWindowIDs"
         /// From when Claude was the only provider; read as Claude's choice until the first write replaces it.
         static let claudeOnlyBadgeWindowID = "badgeWindowID"
-        static let disabledProviders = "disabledProviders"
+        static let providerPlacements = "providerPlacements"
         static let openPopoverShortcut = "openPopoverShortcut"
         static let shortcutKeyCode = "keyCode"
         static let shortcutModifiers = "modifiers"
@@ -49,10 +49,17 @@ public final class SettingsStore {
             refreshInterval: AppSettings.refreshIntervalChoices.first { $0.wholeMinutes == storedMinutes }
                 ?? AppSettings.defaultRefreshInterval,
             badgeWindowIDs: readBadgeWindowIDs(from: defaults),
-            disabledProviders: Set((defaults.object(forKey: Key.disabledProviders) as? [String] ?? [])
-                .map(ProviderID.init(rawValue:))),
+            providerPlacements: readProviderPlacements(from: defaults),
             openPopoverShortcut: readShortcut(defaults.object(forKey: Key.openPopoverShortcut))
         ).supported()
+    }
+
+    /// A placement this version does not know is skipped, which leaves its provider in the menu bar.
+    private static func readProviderPlacements(from defaults: UserDefaults) -> [ProviderID: ProviderPlacement] {
+        let stored = defaults.object(forKey: Key.providerPlacements) as? [String: String] ?? [:]
+        return Dictionary(uniqueKeysWithValues: stored.compactMap { provider, placement in
+            ProviderPlacement(rawValue: placement).map { (ProviderID(provider), $0) }
+        })
     }
 
     private static func readBadgeWindowIDs(from defaults: UserDefaults) -> [ProviderID: String] {
@@ -77,7 +84,9 @@ public final class SettingsStore {
         defaults.set(Dictionary(uniqueKeysWithValues: settings.badgeWindowIDs.map { ($0.key.rawValue, $0.value) }),
                      forKey: Key.badgeWindowIDs)
         defaults.removeObject(forKey: Key.claudeOnlyBadgeWindowID)
-        defaults.set(settings.disabledProviders.map(\.rawValue).sorted(), forKey: Key.disabledProviders)
+        defaults.set(
+            Dictionary(uniqueKeysWithValues: settings.providerPlacements.map { ($0.key.rawValue, $0.value.rawValue) }),
+            forKey: Key.providerPlacements)
         defaults.set(settings.openPopoverShortcut.map { shortcut -> [String: Any] in
             [Key.shortcutKeyCode: Int(shortcut.keyCode), Key.shortcutModifiers: shortcut.modifiers.storedNames]
         }, forKey: Key.openPopoverShortcut)

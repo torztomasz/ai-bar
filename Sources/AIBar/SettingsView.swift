@@ -22,8 +22,10 @@ struct SettingsView: View {
                     refreshIntervalPicker
                     openShortcutRecorder
                 }
-                ForEach(usage.providers, id: \.id) { provider in
-                    providerSection(provider)
+                Section("Providers") {
+                    ForEach(usage.providers, id: \.id) { provider in
+                        placementPicker(for: provider)
+                    }
                 }
             }
             .formStyle(.grouped)
@@ -61,43 +63,31 @@ struct SettingsView: View {
         }
     }
 
-    /// The menu bar window is only asked for while the provider is shown, when the choice has an effect.
-    private func providerSection(_ provider: any UsageProvider) -> some View {
-        Section(provider.displayName) {
-            providerToggle(provider)
-            if settingsStore.settings.isEnabled(provider.id) {
-                badgeWindowPicker(for: provider.id)
-            }
-        }
-    }
-
-    /// The last provider still on cannot be turned off: the menu bar item would have nothing left to show.
-    private func providerToggle(_ provider: any UsageProvider) -> some View {
-        let isEnabled = settingsStore.settings.isEnabled(provider.id)
-        let isLastEnabled = isEnabled && usage.states.count == 1
-        return Toggle("Show usage", isOn: Binding(
-            get: { isEnabled },
-            set: { enabled in settingsStore.update { $0.setEnabled(enabled, for: provider.id) } }
-        ))
-        .disabled(isLastEnabled)
-        .help(isLastEnabled ? "At least one provider stays on" : "")
-    }
-
-    /// Lists what the badge would actually show: a stored choice the snapshot no longer reports is displayed as the
-    /// primary window it falls back to. Before the first snapshot only the default can be named.
-    private func badgeWindowPicker(for provider: ProviderID) -> some View {
-        let state = usage.states.first { $0.id == provider }
-        let shownWindowID = state?.badgeWindow(for: settingsStore.settings.badgeWindowIDs[provider])?.id
-        return Picker("Show in menu bar", selection: Binding(
-            get: { shownWindowID },
-            set: { windowID in settingsStore.update { $0.badgeWindowIDs[provider] = windowID } }
+    /// One choice per provider covers both where it appears and which window the menu bar shows, since a window is
+    /// only chosen for the menu bar.
+    ///
+    /// Lists what the badge would actually show: a stored window the snapshot no longer reports is displayed as the
+    /// primary window it falls back to. Until the provider has reported, only the default can be named.
+    private func placementPicker(for provider: any UsageProvider) -> some View {
+        let settings = settingsStore.settings
+        let state = usage.states.first { $0.id == provider.id }
+        let windows = state?.snapshot?.windows ?? []
+        let shownWindowID = state?.badgeWindow(for: settings.badgeWindowIDs[provider.id])?.id
+        return Picker(provider.displayName, selection: Binding(
+            get: { ProviderChoice(placement: settings.placement(of: provider.id), windowID: shownWindowID) },
+            set: { choice in settingsStore.update { choice.apply(to: &$0, for: provider.id) } }
         )) {
-            if shownWindowID == nil {
-                Text("5-hour (default)").tag(String?.none)
+            Section("Menu bar and popover") {
+                if windows.isEmpty {
+                    Text("5-hour").tag(ProviderChoice.menuBar(windowID: shownWindowID))
+                }
+                ForEach(windows) { window in
+                    Text(window.title).tag(ProviderChoice.menuBar(windowID: window.id))
+                }
             }
-            ForEach(state?.snapshot?.windows ?? []) { window in
-                Text(window.title).tag(String?.some(window.id))
-            }
+            Divider()
+            Text("Popover only").tag(ProviderChoice.popoverOnly)
+            Text("Off").tag(ProviderChoice.off)
         }
     }
 
@@ -130,6 +120,35 @@ struct SettingsView: View {
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    }
+}
+
+/// A provider's row in Settings: its placement, together with the window the menu bar shows.
+private enum ProviderChoice: Hashable {
+    /// Nil is the provider's primary window.
+    case menuBar(windowID: UsageWindow.ID?)
+    case popoverOnly
+    case off
+
+    init(placement: ProviderPlacement, windowID: UsageWindow.ID?) {
+        switch placement {
+        case .menuBar: self = .menuBar(windowID: windowID)
+        case .popoverOnly: self = .popoverOnly
+        case .off: self = .off
+        }
+    }
+
+    /// Leaving the menu bar keeps the window chosen for it, so it is back when the provider returns.
+    func apply(to settings: inout AppSettings, for provider: ProviderID) {
+        switch self {
+        case .menuBar(let windowID):
+            settings.badgeWindowIDs[provider] = windowID
+            settings.place(provider, .menuBar)
+        case .popoverOnly:
+            settings.place(provider, .popoverOnly)
+        case .off:
+            settings.place(provider, .off)
+        }
     }
 }
 

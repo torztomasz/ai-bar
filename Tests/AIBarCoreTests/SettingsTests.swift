@@ -6,34 +6,45 @@ import Testing
 @Suite struct AppSettingsDefaults {
     @Test func pollsEveryFiveMinutesShowsEveryProvidersPrimaryWindowAndHasNoShortcut() {
         #expect(AppSettings() == AppSettings(refreshInterval: .seconds(5 * 60), badgeWindowIDs: [:],
-                                             disabledProviders: [], openPopoverShortcut: nil))
+                                             providerPlacements: [:],
+                                             openPopoverShortcut: nil))
     }
 
     // A provider the settings have never heard of is one added by an update, which the user should get to see.
-    @Test func everyProviderStartsOutEnabled() {
-        #expect(AppSettings().isEnabled(ProviderID("added-later")))
+    @Test func everyProviderStartsOutInTheMenuBar() {
+        #expect(AppSettings().placement(of: ProviderID("added-later")) == .menuBar)
     }
 }
 
-// Method: toggle providers through `setEnabled`, the call the Settings window makes, and read the outcome back
-// through `isEnabled`, the question the poller asks.
-@Suite struct ProviderToggles {
-    @Test func turningAProviderOffLeavesTheOthersOn() {
+// Method: place providers through `place`, the call the Settings window makes, and read the outcome back through
+// `placement(of:)`, the question the poller and the badge ask.
+@Suite struct ProviderPlacements {
+    @Test func placingOneProviderLeavesTheOthersInTheMenuBar() {
         var settings = AppSettings()
 
-        settings.setEnabled(false, for: chatGPT)
+        settings.place(chatGPT, .popoverOnly)
 
-        #expect(!settings.isEnabled(chatGPT))
-        #expect(settings.isEnabled(claude))
+        #expect(settings.placement(of: chatGPT) == .popoverOnly)
+        #expect(settings.placement(of: claude) == .menuBar)
     }
 
-    @Test func turningAProviderBackOnRestoresTheDefaults() {
+    // The poller skips a provider that is off; one left to the popover still needs its data.
+    @Test func onlyAProviderThatIsOffIsNotFetched() {
+        #expect(ProviderPlacement.menuBar.isFetched)
+        #expect(ProviderPlacement.popoverOnly.isFetched)
+        #expect(!ProviderPlacement.off.isFetched)
+    }
+
+    // The menu bar is stored as no entry at all, so going back to it must leave nothing behind.
+    @Test(arguments: [ProviderPlacement.popoverOnly, .off])
+    func returningAProviderToTheMenuBarRestoresTheDefaults(from placement: ProviderPlacement) {
         var settings = AppSettings()
 
-        settings.setEnabled(false, for: chatGPT)
-        settings.setEnabled(true, for: chatGPT)
+        settings.place(chatGPT, placement)
+        settings.place(chatGPT, .menuBar)
 
         #expect(settings == AppSettings())
+        #expect(settings == AppSettings(providerPlacements: [chatGPT: .menuBar]))
     }
 }
 
@@ -51,23 +62,24 @@ import Testing
             SettingsStore(defaults: defaults).update {
                 $0.refreshInterval = .seconds(10 * 60)
                 $0.badgeWindowIDs = [claude: "weekly_all", chatGPT: "weekly"]
-                $0.setEnabled(false, for: chatGPT)
+                $0.place(chatGPT, .off)
+                $0.place(claude, .popoverOnly)
             }
 
             #expect(SettingsStore(defaults: defaults).settings
                     == AppSettings(refreshInterval: .seconds(10 * 60),
                                    badgeWindowIDs: [claude: "weekly_all", chatGPT: "weekly"],
-                                   disabledProviders: [chatGPT]))
+                                   providerPlacements: [chatGPT: .off, claude: .popoverOnly]))
         }
     }
 
-    @Test func turningAProviderBackOnSurvivesARelaunch() {
+    @Test func returningAProviderToTheMenuBarSurvivesARelaunch() {
         withIsolatedDefaults { defaults in
             let store = SettingsStore(defaults: defaults)
-            store.update { $0.setEnabled(false, for: chatGPT) }
-            store.update { $0.setEnabled(true, for: chatGPT) }
+            store.update { $0.place(chatGPT, .off) }
+            store.update { $0.place(chatGPT, .menuBar) }
 
-            #expect(SettingsStore(defaults: defaults).settings.disabledProviders.isEmpty)
+            #expect(SettingsStore(defaults: defaults).settings.placement(of: chatGPT) == .menuBar)
         }
     }
 
@@ -158,12 +170,21 @@ import Testing
         }
     }
 
-    @Test(arguments: ["chatgpt", 42, [1, 2]] as [any Sendable])
-    func unreadableDisabledProvidersLeaveEveryProviderOn(stored: any Sendable) {
+    @Test(arguments: ["off", 42, ["chatgpt": 42], ["chatgpt": "sidebar"]] as [any Sendable])
+    func unreadablePlacementsLeaveEveryProviderInTheMenuBar(stored: any Sendable) {
         withIsolatedDefaults { defaults in
-            defaults.set(stored, forKey: SettingsStore.Key.disabledProviders)
+            defaults.set(stored, forKey: SettingsStore.Key.providerPlacements)
 
-            #expect(SettingsStore(defaults: defaults).settings.disabledProviders.isEmpty)
+            #expect(SettingsStore(defaults: defaults).settings == AppSettings())
+        }
+    }
+
+    // One entry from a future version must not cost the entries this version understands.
+    @Test func anUnknownPlacementDoesNotHideTheKnownOnes() {
+        withIsolatedDefaults { defaults in
+            defaults.set(["chatgpt": "sidebar", "claude": "off"], forKey: SettingsStore.Key.providerPlacements)
+
+            #expect(SettingsStore(defaults: defaults).settings == AppSettings(providerPlacements: [claude: .off]))
         }
     }
 

@@ -11,6 +11,21 @@ enum BadgeRenderer {
         let text: String
     }
 
+    /// Stands in for the readings when no provider is in the menu bar, so the item, and with it the way to the
+    /// popover and Settings, keeps its place.
+    static func placeholder(height: CGFloat) -> NSImage {
+        let symbol = NSImage(systemSymbolName: "gauge.with.needle", accessibilityDescription: "AI Bar")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .medium))
+        let symbolSize = symbol?.size ?? .zero
+        let image = NSImage(size: NSSize(width: ceil(symbolSize.width), height: height), flipped: false) { bounds in
+            symbol?.draw(in: NSRect(x: bounds.midX - symbolSize.width / 2, y: bounds.midY - symbolSize.height / 2,
+                                    width: symbolSize.width, height: symbolSize.height))
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
     /// As narrow as its widest row: the button already adds the menu bar's standard spacing on either side.
     static func image(rows: [Row], height: CGFloat) -> NSImage {
         let layout = BadgeLayout(rowCount: rows.count, height: height)

@@ -15,9 +15,12 @@ public struct BadgeLayout: Equatable, Sendable {
     static let singleRowFontSize: Double = 12
     /// The largest size at which two rows of digits clear each other in a 20 pt badge.
     static let stackedFontSize: Double = 9.5
-    static let stackedMarkSize: Double = 8.5
-    /// Room for a row of stacked digits and the gap to the next.
-    static let stackedRowPitch: Double = 11
+    static let stackedMarkSize: Double = 8
+    /// Rows this far apart keep marks and digits clear of their neighbours, and in a badge of full height leave
+    /// the refresh light, which runs along the badge's edges, a gap of its own.
+    static let stackedRowPitch: Double = 9.5
+    /// The least room the outer rows leave at the badge's top and bottom: the refresh light's width.
+    static let edgeClearance: Double = 1.5
 
     init(fontSize: Double, markSize: Double?, rowMidlines: [Double]) {
         self.fontSize = fontSize
@@ -25,12 +28,18 @@ public struct BadgeLayout: Equatable, Sendable {
         self.rowMidlines = rowMidlines
     }
 
+    /// Stacked readings reach into the corners a capsule would cut off, so their outline needs tighter corners.
+    public var isStacked: Bool {
+        rowMidlines.count > 1
+    }
+
     public init(rowCount: Int, height: Double) {
         guard rowCount > 1 else {
             self.init(fontSize: Self.singleRowFontSize, markSize: nil, rowMidlines: [height / 2])
             return
         }
-        let pitch = min(Self.stackedRowPitch, height / Double(rowCount))
+        let roomForMidlines = height - Self.stackedMarkSize - 2 * Self.edgeClearance
+        let pitch = min(Self.stackedRowPitch, roomForMidlines / Double(rowCount - 1))
         let topMidline = height / 2 + pitch * Double(rowCount - 1) / 2
         self.init(fontSize: Self.stackedFontSize, markSize: Self.stackedMarkSize,
                   rowMidlines: (0..<rowCount).map { topMidline - pitch * Double($0) })

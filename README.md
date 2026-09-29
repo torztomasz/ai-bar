@@ -41,8 +41,9 @@ the reset time yields the projected usage. Readings are stored per window under
 
 The gear in the popover (or ⌘, while it is open) opens Settings: launch at login, how often to refresh
 (1 to 15 minutes, default 5) and an optional shortcut that opens the popover from
-any app (none by default). Each provider has a switch to show or hide its usage, and a choice of which of its
-windows the pill shows; a provider that is switched off is not fetched. At least one provider stays on. A Hyper key (all of ⌃⌥⇧⌘, e.g. Caps Lock remapped by Karabiner-Elements or Raycast)
+any app (none by default). Each provider has one choice: which of its windows the pill shows, "Popover only", which keeps it
+out of the menu bar, or "Off", which also stops fetching it. With no provider in the menu bar the item
+shows a gauge icon, so the popover stays within reach. A Hyper key (all of ⌃⌥⇧⌘, e.g. Caps Lock remapped by Karabiner-Elements or Raycast)
 shows as ✦. The shortcut needs ⌃ or ⌘ unless it is a function key, because macOS 15 ignores global shortcuts
 built from ⌥ and ⇧ alone. Changes apply at once and are kept in the
 app's user defaults (`defaults read com.torz.aibar`).
