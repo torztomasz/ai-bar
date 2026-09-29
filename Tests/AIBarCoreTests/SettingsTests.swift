@@ -4,8 +4,9 @@ import Testing
 
 // Method: compare against the defaults the ticket specifies, written out as literals.
 @Suite struct AppSettingsDefaults {
-    @Test func pollsEveryFiveMinutesAndShowsThePrimaryWindow() {
-        #expect(AppSettings() == AppSettings(refreshInterval: .seconds(5 * 60), badgeWindowID: nil))
+    @Test func pollsEveryFiveMinutesShowsThePrimaryWindowAndHasNoShortcut() {
+        #expect(AppSettings() == AppSettings(refreshInterval: .seconds(5 * 60), badgeWindowID: nil,
+                                             openPopoverShortcut: nil))
     }
 }
 
@@ -41,6 +42,25 @@ import Testing
         }
     }
 
+    @Test func shortcutSurvivesARelaunch() {
+        withIsolatedDefaults { defaults in
+            let hyperK = GlobalShortcut(keyCode: 40, modifiers: .hyper)
+            SettingsStore(defaults: defaults).update { $0.openPopoverShortcut = hyperK }
+
+            #expect(SettingsStore(defaults: defaults).settings.openPopoverShortcut == hyperK)
+        }
+    }
+
+    @Test func removingTheShortcutSurvivesARelaunch() {
+        withIsolatedDefaults { defaults in
+            let store = SettingsStore(defaults: defaults)
+            store.update { $0.openPopoverShortcut = GlobalShortcut(keyCode: 40, modifiers: .hyper) }
+            store.update { $0.openPopoverShortcut = nil }
+
+            #expect(SettingsStore(defaults: defaults).settings.openPopoverShortcut == nil)
+        }
+    }
+
     @Test func reportsEachChange() {
         withIsolatedDefaults { defaults in
             let store = SettingsStore(defaults: defaults)
@@ -72,6 +92,31 @@ import Testing
             defaults.set(42, forKey: SettingsStore.Key.badgeWindowID)
 
             #expect(SettingsStore(defaults: defaults).settings.badgeWindowID == nil)
+        }
+    }
+
+    @Test(arguments: [
+        "hyper-k",
+        ["keyCode": 40] as [String: any Sendable],
+        ["keyCode": 40, "modifiers": ["command", "fn"]] as [String: any Sendable],
+        ["keyCode": 70_000, "modifiers": ["command"]] as [String: any Sendable],
+        ["keyCode": -1, "modifiers": ["command"]] as [String: any Sendable],
+        ["keyCode": 40, "modifiers": ["option"]] as [String: any Sendable],
+    ] as [any Sendable])
+    func unreadableOrUnusableShortcutFallsBackToNone(stored: any Sendable) {
+        withIsolatedDefaults { defaults in
+            defaults.set(stored, forKey: SettingsStore.Key.openPopoverShortcut)
+
+            #expect(SettingsStore(defaults: defaults).settings.openPopoverShortcut == nil)
+        }
+    }
+
+    @Test func updatingToAnUnusableShortcutKeepsNone() {
+        withIsolatedDefaults { defaults in
+            let store = SettingsStore(defaults: defaults)
+            store.update { $0.openPopoverShortcut = GlobalShortcut(keyCode: 40, modifiers: []) }
+
+            #expect(store.settings.openPopoverShortcut == nil)
         }
     }
 

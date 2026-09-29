@@ -7,6 +7,8 @@ struct SettingsView: View {
     let settingsStore: SettingsStore
     /// Only for the titles of the windows the badge can show.
     @ObservedObject var usage: UsageController
+    /// Only to report a shortcut the system refused, and to stand it down while a new one is recorded.
+    let hotKey: PopoverHotKey
 
     /// Mirrors the system's login item rather than a stored preference; re-read whenever the window appears.
     @State private var launchesAtLogin = LaunchAtLogin.isEnabled
@@ -18,6 +20,7 @@ struct SettingsView: View {
                 launchAtLoginToggle
                 refreshIntervalPicker
                 badgeWindowPicker
+                openShortcutRecorder
             } footer: {
                 Text("Version \(appVersion)")
                     .font(.caption)
@@ -68,6 +71,20 @@ struct SettingsView: View {
             }
             ForEach(state?.snapshot?.windows ?? []) { window in
                 Text(window.title).tag(String?.some(window.id))
+            }
+        }
+    }
+
+    private var openShortcutRecorder: some View {
+        LabeledContent {
+            ShortcutRecorder(
+                shortcut: settingsStore.settings.openPopoverShortcut,
+                onChange: { shortcut in settingsStore.update { $0.openPopoverShortcut = shortcut } },
+                onRecordingChange: hotKey.setPaused)
+        } label: {
+            Text("Open AI Bar")
+            if let failure = hotKey.failure {
+                Text(failure)
             }
         }
     }

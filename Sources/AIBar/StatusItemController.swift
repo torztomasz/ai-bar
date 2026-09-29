@@ -45,6 +45,12 @@ final class StatusItemController: NSObject {
         popover.performClose(nil)
     }
 
+    /// For the global shortcut, which has no button press of its own to anchor to.
+    func togglePopover() {
+        guard let button = statusItem.button else { return }
+        togglePopover(from: button)
+    }
+
     /// Text and tooltip both describe the window chosen in settings.
     private func render() {
         let window = shownState?.badgeWindow(for: settingsStore.settings.badgeWindowID)

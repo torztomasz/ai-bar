@@ -31,7 +31,10 @@ the reset time yields the projected usage. Readings are stored per window under
 ## Settings
 
 The gear in the popover (or ⌘, while it is open) opens Settings: launch at login, how often to refresh
-(1 to 15 minutes, default 5), and which window the pill shows. Changes apply at once and are kept in the
+(1 to 15 minutes, default 5), which window the pill shows, and an optional shortcut that opens the popover from
+any app (none by default). A Hyper key (all of ⌃⌥⇧⌘, e.g. Caps Lock remapped by Karabiner-Elements or Raycast)
+shows as ✦. The shortcut needs ⌃ or ⌘ unless it is a function key, because macOS 15 ignores global shortcuts
+built from ⌥ and ⇧ alone. Changes apply at once and are kept in the
 app's user defaults (`defaults read com.torz.aibar`).
 
 ## How the data is fetched
