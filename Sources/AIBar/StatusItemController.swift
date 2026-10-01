@@ -146,6 +146,7 @@ private final class PillTracer: NSObject {
     private var tracer = RefreshTracer()
     private var isRefreshing = false
     private var displayLink: CADisplayLink?
+    private var lightsOut: Timer?
     /// The outline the path was last built for, so it is only rebuilt when the badge changes shape.
     private var drawnOutline: Outline?
 
@@ -179,9 +180,11 @@ private final class PillTracer: NSObject {
         let now = Date()
         if refreshing {
             tracer.start(at: now)
-            startDisplayLink()
+            lightsOut?.invalidate()
+            restartDisplayLink()
         } else {
             tracer.stop(at: now)
+            scheduleLightsOut()
         }
         draw(at: now)
     }
@@ -226,21 +229,43 @@ private final class PillTracer: NSObject {
     }
 
     /// Linked to the button's display, so the light moves in step with the screen it is on, including while a
-    /// menu is being tracked. It only runs while there is light to draw.
-    private func startDisplayLink() {
-        guard displayLink == nil, let button else { return }
+    /// menu is being tracked. It only runs while there is light to draw. Every refresh gets a new one, because a
+    /// link that stopped firing while its display slept may never fire again.
+    private func restartDisplayLink() {
+        stopDisplayLink()
+        guard let button else { return }
         let link = button.displayLink(target: self, selector: #selector(step))
         link.add(to: .main, forMode: .common)
         displayLink = link
+    }
+
+    private func stopDisplayLink() {
+        displayLink?.invalidate()
+        displayLink = nil
     }
 
     @objc private func step(_ link: CADisplayLink) {
         let now = Date()
         draw(at: now)
         if !tracer.isMoving(at: now) {
-            link.invalidate()
-            displayLink = nil
+            stopDisplayLink()
         }
+    }
+
+    /// The display link alone would leave the light hanging mid-lap if it stopped firing, e.g. while the display
+    /// slept through a refresh.
+    private func scheduleLightsOut() {
+        lightsOut?.invalidate()
+        guard let goesOutAt = tracer.goesOutAt else { return }
+        let timer = Timer(fire: goesOutAt, interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.draw(at: Date())
+                self.stopDisplayLink()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        lightsOut = timer
     }
 
     private func draw(at now: Date) {

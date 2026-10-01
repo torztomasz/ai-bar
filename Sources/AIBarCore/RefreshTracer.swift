@@ -78,15 +78,25 @@ public struct RefreshTracer: Equatable, Sendable {
             let travelled = anchor.travelled(at: now)
             return Segment(tail: max(anchor.tail, travelled - Self.length), head: travelled)
         case .finishing(let anchor, let endOfLap):
+            // Ends by the clock, not by comparing positions, so it agrees exactly with `goesOutAt`.
+            guard let goesOutAt, now < goesOutAt else { return nil }
             let travelled = anchor.travelled(at: now)
             let tail = max(anchor.tail, travelled - Self.length)
-            guard tail < endOfLap else { return nil }
-            return Segment(tail: tail, head: min(travelled, endOfLap))
+            return Segment(tail: min(tail, endOfLap), head: min(travelled, endOfLap))
         }
     }
 
     /// False once the light has drained away, so the display link drawing it can stop.
     public func isMoving(at now: Date) -> Bool {
         segment(at: now) != nil
+    }
+
+    /// When the draining light goes out; nil unless it is draining. A display link stops firing while its display
+    /// sleeps, so the light needs a clock to go out by, or it would hang mid-lap until the next refresh.
+    public var goesOutAt: Date? {
+        guard case .finishing(let anchor, let endOfLap) = motion else { return nil }
+        // `stop` puts the end of the lap ahead of the tail, so the tail's own run is what reaches it.
+        let lapsUntilTailReachesEnd = endOfLap + Self.length - anchor.head
+        return anchor.since.addingTimeInterval(lapsUntilTailReachesEnd * Self.secondsPerLap)
     }
 }

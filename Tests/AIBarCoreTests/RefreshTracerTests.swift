@@ -43,6 +43,20 @@ import Testing
         #expect(!tracer.isMoving(at: at(5)))
     }
 
+    // The light must go out on a clock when the display link drawing it stops firing, so the clock has to agree with
+    // the segment: still lit a hair before, gone from then on.
+    @Test func goesOutWhenTheDrainingLightIsGone() throws {
+        var tracer = RefreshTracer()
+        tracer.start(at: at(0))
+        #expect(tracer.goesOutAt == nil)
+        tracer.stop(at: at(0.45))
+
+        let goesOutAt = try #require(tracer.goesOutAt)
+        #expect(abs(goesOutAt.timeIntervalSince(at(0.9 + 0.252))) < 1e-6)
+        #expect(tracer.segment(at: goesOutAt.addingTimeInterval(-0.001)) != nil)
+        #expect(tracer.segment(at: goesOutAt) == nil)
+    }
+
     // A refresh far shorter than a lap would otherwise be a flicker.
     @Test func aRefreshShorterThanALapStillShowsAWholeLap() {
         var tracer = RefreshTracer()
